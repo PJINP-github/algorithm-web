@@ -1,0 +1,377 @@
+# 权限与功能标签页配置。
+#
+# 说明：
+# - Feature_Tab_Visibility：控制用户登录后是否显示对应功能标签页。
+#   true = 显示；false = 不显示。
+# - Administrator_Rights：管理员权限。
+# - Standard_Level_1_User_Privileges：普通一级用户权限。
+# - Standard_Level_2_User_Privileges：普通二级用户权限。
+# - 具体 model.* 权限仍控制标签页内部按钮是否可点击；即使标签页显示，按钮也必须有对应权限才可执行。
+# - Feature_File_Display：控制处理文件区域允许显示的文件名；未配置的功能保持后端默认过滤规则。
+# - Log_Display.max_visual_lines：控制运行日志内框每页最多显示的视觉行数；未配置时程序默认 27 行。
+# - rows_downloaded_file_algorithm：依赖区每页显示的算法下载文件数量；未配置时默认 8 行。
+# - 建议保持权限键名为 ASCII，减少不同编辑器保存 YAML 时的兼容问题。
+
+# 后台浏览器自动化不使用系统默认浏览器。
+# 键名使用工作区后端模型 ID；每个模型可以使用自己的浏览器版本和登录数据。
+Browser_Path:
+  annotation: 'model/Model-Annotation-tag-0.1.1+python/chrome/chrome.exe'
+  weekly: 'model/Weekly-Report-Print-tag-0.0.8+python/date_review/chrome/chrome.exe'
+rows_downloaded_file_algorithm: 8
+
+# 登录后功能标签页显示开关。
+Feature_Tab_Visibility:
+  # 管理员：默认显示全部功能标签页。
+  Administrator_Rights:
+    Log_Review: true
+    Model-Annotation: true
+    Offline_Package_Organization: true
+    Weekly-Report-Print: true
+    Trueno-Inference: true
+
+  # 普通一级：默认只显示日志转换。
+  Standard_Level_1_User_Privileges:
+    Log_Review: false
+    Model-Annotation: false
+    Offline_Package_Organization: true
+    Weekly-Report-Print: true
+    Trueno-Inference: true
+
+  # 普通二级：默认显示全部业务功能标签页。
+  Standard_Level_2_User_Privileges:
+    Log_Review: false
+    Model-Annotation: false
+    Offline_Package_Organization: true
+    Weekly-Report-Print: true
+    Trueno-Inference: true
+
+# 处理文件显示白名单。
+# 说明：这里只按文件名匹配，不影响后端任务实际产物；未列出的产物不会出现在“处理文件”列表里。
+# Offline_Package_Organization 不在这里列出，后端仅排除 accuracy_*.zip 和 image_*.zip 等中间产物。
+Feature_File_Display:
+  # Model-Annotation：只显示核心标注产物。
+  Model-Annotation:
+    - 数字-9-模型标注训练清单.xlsx
+    - 数字-1-标注任务明细.txt
+    - 数字-4-模型训练记录.txt
+    - 数字-0-h模式历史学习.json
+
+  # Weekly-Report-Print：只显示周报数据表和待办转换表。
+  Weekly-Report-Print:
+    - old.xlsx
+    - result-2.xlsx
+    - upload-2.xlsx
+
+# 运行日志显示配置。
+Log_Display:
+  # 每页最多显示的视觉行数；可按屏幕空间自行调整，未配置时默认 27。
+  max_visual_lines: 19
+
+# 算法依赖区文件展示配置。
+#            docker ps | grep image
+#            guangfu就是光伏版本
+#            fukong就是辅控版本
+#            pg就是中广核版本
+#            drone就是无人机版本
+#            xy就是新余版本
+# file 为相对于 Cargo.toml 所在目录的路径；class 用于依赖区分类按钮；同一类别的文件按配置顺序显示。
+Document_display:
+  - file: model/Weekly-Report-Print-tag-0.0.8+python/date_review/0Work/result-2.xlsx
+    desc: 站点-算法-模型+达标交付
+    class: examine
+    notes: 该文件可供查看站点算法准确率此类情况，详细到各个站点精细数据
+  - file: model/Weekly-Report-Print-tag-0.0.8+python/date_review/0Work/upload-2.xlsx
+    desc: 站点-算法-模型+更新
+    class: examine
+    notes: 该文件可供查看站点需要更新算法模型情况，以及各个模型准确率、适配度情况。
+  - file: model/Model-Annotation-tag-0.1.1+python/Work-txt/数字-9-模型标注训练清单.xlsx
+    desc: 模型-标注-训练清单
+    class: examine
+    notes: 该文件可供查看标注任务需要更新到算法模型的进度
+
+  - file: sources/tools/20260820-arm-tool.tar.gz
+    desc: 离线站点-升级2233-tool包-arm结构-tag+0820
+    class: upgrade
+    notes: 该文件可供Linux服务结构为Arm的巡视主机升级2233端口网页
+  - file: sources/tools/20260820-tool.tar.gz
+    desc: 离线站点-升级2233-tool包-x86结构-tag+0820
+    class: upgrade
+    notes: 该文件可供Linux服务结构为X86的巡视主机升级2233端口网页
+
+  - file: sources/tools/caiji-0.0.64-guangfu.tar
+    desc: 离线站点-光伏-后端-tag-0.0.64
+    class: upgrade
+    notes: 该文件可供巡视界面为绿色光伏版本的站点升级所需后端+
+  - file: sources/tools/caiji-fukong-0.0.47-fukong.tar
+    desc: 离线站点-辅控-后端-tag-0.0.64
+    class: upgrade
+    notes: 该文件可供巡视界面为蓝色辅控版本的站点升级所需后端
+  - file: sources/tools/caiji-fukong-0.0.47-fukong.tar
+    desc: 离线站点-辅控-后端-tag-0.0.64
+    class: upgrade
+    notes: 该文件可供巡视界面为蓝色辅控版本的站点升级所需后端
+  - file: sources/tools/caiji-0.0.36-xinyu-17.tar
+    desc: 离线站点-发电（新余、渤海）-后端-tag-0.0.36
+    class: upgrade
+    notes: 该文件可供巡视界面为发电界面（新余、渤海）升级所需后端
+  - file: sources/tools/zgh-image-collection-backend-1.0.27-pg.tar
+    desc: 离线站点-中广核-postgreSQL-后端-tag-1.0.27
+    class: upgrade
+    notes: 该文件可供巡视系统配置为PostSQL的中广核站点升级所需后端
+  - file: sources/tools/zgh-image-collection-backend-1.0.16-mysql.tar
+    desc: 离线站点-中广核-mysql-后端-tag-1.0.16
+    class: upgrade
+    notes: 该文件可供巡视系统配置为MySQL的中广核站点升级所需后端
+
+  - file: sources/tools/image-collection-drone-1.0.4-x8664.tar
+    desc: 离线站点-前端-光伏主线、蓝色辅控主线、发电（新余/良村）版本通用-tag-1.0.4
+    class: upgrade
+    notes: 该文件可供巡视系统配置为光伏主线、蓝色辅控主线、发电（新余/良村）所属的站点升级所需前端,不建议光伏和辅控使用
+  - file: sources/tools/image-collection-frontend-algo_86.tar
+    desc: 离线站点-前端-光伏主线、蓝色辅控主线版本通用-tag-0.86
+    class: upgrade
+    notes: 该文件可供巡视系统配置为光伏主线、蓝色辅控所属的站点升级所需前端,优先使用
+  - file: sources/tools/zgh-image-collection-frontend-1.0.2-x86.tar
+    desc: 离线站点-前端-中广核站点pg-mysql通用-tag-1.0.2
+    class: upgrade
+    notes: 该文件可供巡视系统配置为中广核配置PostSQL和MySQL数据库所属的站点升级所需前端
+
+  - file: sources/tools/algokit/algokit.zip
+    desc: 在线上传-通用算法主机接收端-需配置
+    class: backup
+    notes: 该文件可供通用算法主机接收端，用于接收2443上传数据到公司autoedge
+ 
+  - file: sources/tools/algorelay/algo-relay.zip
+    desc: 在线上传-场站笔记本发送端-无需配置
+    class: backup
+    notes: 该文件可供场站笔记本通用发送端端，用于接收2443上传数据到公司autoedge   
+
+  - file: sources/codes/meter_p3/meter_p3.zip
+    desc: 调用代码-表计-开口方向错误-放置覆盖src/algorithm/meter_p3里
+    class: repair
+    notes: 该文件可供场站出现数值标记开口错误问题，用于替换老文件实现正常识别开口   
+  - file: sources/codes/meter_digit_p2_slice/meter_digit_p2_slice.zip
+    desc: 调用代码-需求裁决数显前后末端字母-放置添加src/algorithm里
+    class: repair
+    notes: 该文件可供场站出现需求去除英文字母问题，用于创建算法类别实现新识别无英文数显   
+    
+  - file: sources\codes\switch_pgxnbs_p\switch_pgxnbs_p.py
+    desc: 调用代码-需求校准旋钮方向-放置添加src/algorithm/switch_pgxnbs_p里
+    class: repair
+    notes: 该文件可供场站出现需求拍摄角度影响旋钮方向问题，用于依靠四点标定框辅助算法实现方向确定   
+# 文件说明区：仅管理员可见。path 相对于 Cargo.toml 所在目录，支持 * 通配单层目录名。
+File_Description:
+  enabled: true
+  # 文件说明区每页显示数量；超过此数量时前端分页。
+  page_rows: 10
+  # 文件说明区只展示这些扩展名；文件夹不受此列表影响。
+  display_extensions:
+    - txt
+    - zip
+    - xlsx
+    - json
+    - log
+    - md
+    - yaml
+    - yml
+    - csv
+  # 打开文件说明区时，超过该天数的内容只提示一次。
+  stale_days: 15
+  # 相对于项目根目录的回收站目录；批量清理只移动，不永久删除。
+  recycle_bin: .portal_recycle
+  roots:
+    - path: model/*/portal_outputs
+      desc: 各模型任务输出
+      recursive: true
+    - path: model/*/portal_inputs
+      desc: 各模型任务输入
+      recursive: true
+    - path: model/*/meter_output_*
+      desc: 表计调试输出
+      recursive: true
+    - path: model/*/newwrap
+      desc: 离线包 newwrap 输出
+      recursive: true
+    - path: model/*/output
+      desc: 离线包或周报输出
+      recursive: true
+    - path: model/*/date_review/0Work
+      desc: 周报基础工作目录
+      recursive: true
+
+# 模型推理能力白名单及显示顺序；不在此列表中的能力不显示。
+Algorithm_Order:
+  - id: light_pgdzsd_mn
+    desc: mn屏柜大指示灯状态
+  - id: light_pgxzsd_mn
+    desc: mn屏柜小指示灯状态
+  - id: switch_pgbhyb_mn
+    desc: mn屏柜保护压板状态
+  - id: switch_pgkqkg_mn
+    desc: mn屏柜空开状态
+  - id: switch_pgxnbs_p
+    desc: 屏柜旋钮把手状态
+  - id: switch_cn_other
+    desc: 其他型储能指示
+  - id: switch_fh_other
+    desc: 其他型分合指示
+  - id: person
+    desc: 人员闯入
+  - id: meter_digital_led
+    desc: LED数值显示器读数
+  - id: meter_byq_yw
+    desc: 变压器油温表读数
+
+# 管理员：拥有全部页面、文件、配置、授权码和模型执行权限。
+Administrator_Rights:
+  # 登录与工作区基础权限。
+  auth.login: true
+  auth.register: true
+  auth.logout: true
+  workspace.view: true
+
+  # 文件列表、上传、下载、本机打开和文本读取权限。
+  files.list: true
+  files.upload: true
+  files.download: true
+  files.open: true
+  files.content: true
+  files.description.view: true
+  files.description.delete: true
+
+  # YAML 配置查看与保存权限。
+  config.view: true
+  config.edit: true
+
+  # 注册授权码创建与查看权限；系统会自动保留最新 5 条，旧码自动删除失效。
+  get_verification_code: true
+  view_verification_codes: true
+
+  # Log_Review：日志转换。
+  model.log.convert: true
+  model.log.debug_meter: true
+
+  # Model-Annotation：标注任务采集、模型标注和后处理。
+  model.annotation.task: true
+  model.annotation.model: true
+  model.annotation.sum: true
+  model.annotation.sort: true
+  model.annotation.summary: true
+
+  # Offline_Package_Organization：离线包 1-5 模式。
+  model.offline.mode1: true
+  model.offline.mode2: true
+  model.offline.mode3: true
+  model.offline.mode4: true
+  model.offline.mode5: true
+
+  # Weekly-Report-Print：刷新数据、生成周报和更新待办。
+  model.weekly.refresh: true
+  model.weekly.generate: true
+  model.weekly.todo: true
+
+  # Trueno-Inference：YOLO/OCR 本地单模型推理。
+  model.trueno.infer: true
+
+# 普通一级：默认仅开放日志转换相关能力。
+Standard_Level_1_User_Privileges:
+  # 登录与工作区基础权限。
+  auth.login: true
+  auth.register: true
+  auth.logout: true
+  workspace.view: true
+
+  # 文件权限；具体可见文件仍受后端按用户/任务产物隔离。
+  files.list: true
+  files.upload: true
+  files.download: true
+  files.open: true
+  files.content: true
+  files.description.view: false
+  files.description.delete: false
+
+  # 普通用户默认不能在线查看或修改 YAML 配置。
+  config.view: false
+  config.edit: false
+
+  # 普通用户默认不能创建或查看注册授权码。
+  get_verification_code: false
+  view_verification_codes: false
+
+  # Log_Review：日志转换。
+  model.log.convert: true
+  model.log.debug_meter: true
+
+  # Model-Annotation：标注任务采集、模型标注和后处理。
+  model.annotation.task: false
+  model.annotation.model: false
+  model.annotation.sum: false
+  model.annotation.sort: false
+  model.annotation.summary: false
+
+  # Offline_Package_Organization：离线包 1-5 模式。
+  model.offline.mode1: true
+  model.offline.mode2: true
+  model.offline.mode3: true
+  model.offline.mode4: true
+  model.offline.mode5: true
+
+  # Weekly-Report-Print：刷新数据、生成周报和更新待办。
+  model.weekly.refresh: true
+  model.weekly.generate: true
+  model.weekly.todo: true
+
+
+  # Trueno-Inference：YOLO/OCR 本地单模型推理。
+  model.trueno.infer: true
+  
+# 普通二级：默认开放全部业务模型，但不开放配置与授权码管理。
+Standard_Level_2_User_Privileges:
+  # 登录与工作区基础权限。
+  auth.login: true
+  auth.register: true
+  auth.logout: true
+  workspace.view: true
+
+  # 文件权限；具体可见文件仍受后端按用户/任务产物隔离。
+  files.list: true
+  files.upload: true
+  files.download: true
+  files.open: true
+  files.content: true
+  files.description.view: false
+  files.description.delete: false
+
+  # 普通用户默认不能在线查看或修改 YAML 配置。
+  config.view: false
+  config.edit: false
+
+  # 普通用户默认不能创建或查看注册授权码。
+  get_verification_code: false
+  view_verification_codes: false
+
+  # Log_Review：日志转换。
+  model.log.convert: true
+  model.log.debug_meter: true
+
+  # Model-Annotation：标注任务采集、模型标注和后处理。
+  model.annotation.task: true
+  model.annotation.model: true
+  model.annotation.sum: true
+  model.annotation.sort: true
+  model.annotation.summary: true
+
+  # Offline_Package_Organization：离线包 1-5 模式。
+  model.offline.mode1: true
+  model.offline.mode2: true
+  model.offline.mode3: true
+  model.offline.mode4: true
+  model.offline.mode5: true
+
+  # Weekly-Report-Print：刷新数据、生成周报和更新待办。
+  model.weekly.refresh: true
+  model.weekly.generate: true
+  model.weekly.todo: true
+
+  # Trueno-Inference：YOLO/OCR 本地单模型推理。
+  model.trueno.infer: true

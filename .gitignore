@@ -1,0 +1,51 @@
+# ========== 根目录 ==========
+/*
+!/.gitignore
+!/package.json
+!/README.md
+!/todo.db
+!/src/
+!/Document/
+!/model/
+
+# ========== model 层：先忽略 model 下所有，再放行想要的 ==========
+/model/*
+!/model/authority.yaml
+!/model/Log_Review-tag-0.0.1+python/
+!/model/Model-Annotation-tag-0.1.1+python/
+!/model/Offline_Package_Organization-tag-0.0.12+python/
+!/model/trueno3_src-master-0.0.10/
+!/model/Weekly-Report-Print-tag-0.0.8+python/
+
+# ========== Log_Review 层 ==========
+/model/Log_Review-tag-0.0.1+python/*
+!/model/Log_Review-tag-0.0.1+python/txt_log_to_xlsx.py
+!/model/Log_Review-tag-0.0.1+python/identification/
+
+# identification 层
+/model/Log_Review-tag-0.0.1+python/identification/*
+!/model/Log_Review-tag-0.0.1+python/identification/plot_meter_image.py
+
+# ========== Model-Annotation 层 ==========
+/model/Model-Annotation-tag-0.1.1+python/*
+!/model/Model-Annotation-tag-0.1.1+python/src/
+
+# src 层：只保留直接子级的 .py
+/model/Model-Annotation-tag-0.1.1+python/src/*
+!/model/Model-Annotation-tag-0.1.1+python/src/*.py
+
+# ========== Offline_Package_Organization 层 ==========
+/model/Offline_Package_Organization-tag-0.0.12+python/*
+!/model/Offline_Package_Organization-tag-0.0.12+python/*.py
+
+# ========== trueno3 层 ==========
+/model/trueno3_src-master-0.0.10/*
+!/model/trueno3_src-master-0.0.10/local_inference/
+
+# local_inference 层：只保留直接子级的 .py
+/model/trueno3_src-master-0.0.10/local_inference/*
+!/model/trueno3_src-master-0.0.10/local_inference/*.py
+
+# ========== Weekly-Report 层 ==========
+/model/Weekly-Report-Print-tag-0.0.8+python/*
+!/model/Weekly-Report-Print-tag-0.0.8+python/*.py

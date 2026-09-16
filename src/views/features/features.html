@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>功能选择</title>
+    <link rel="stylesheet" href="/features.css">
+</head>
+<body>
+    <header class="topbar">
+        <div>
+            <h1>功能选择</h1>
+            <p id="session-user" aria-hidden="true"></p>
+        </div>
+        <button type="button" id="exit-button">退出</button>
+    </header>
+    <main class="feature-grid">
+        <button type="button" class="feature-card" id="dependency-button">
+            <strong>算法依赖区</strong>
+            <span>查看和下载算法依赖文件</span>
+        </button>
+        <button type="button" class="feature-card" id="workspace-button">
+            <strong>算法工作台</strong>
+            <span>进入模型工作区</span>
+        </button>
+        <button type="button" class="feature-card disabled" id="document-button">
+            <strong>文件说明区</strong>
+            <span>查看文件状态并批量清理</span>
+        </button>
+    </main>
+    <script src="/features.js"></script>
+</body>
+</html>

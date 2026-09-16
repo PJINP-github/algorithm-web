@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>依赖区</title>
+    <link rel="stylesheet" href="/dependencies.css">
+</head>
+<body>
+    <header class="topbar">
+        <div><h1>依赖区</h1><p id="session-user" aria-hidden="true"></p></div>
+        <button type="button" id="back-button">返回</button>
+    </header>
+    <main class="dependency-shell">
+        <section class="category-bar" id="category-bar"></section>
+        <section class="dependency-box">
+            <div class="section-head"><h2>算法下载文件区域</h2><span id="page-label"></span></div>
+            <div class="file-list" id="file-list"></div>
+            <div class="pager hidden" id="pager">
+                <button type="button" id="prev-button">上一页</button>
+                <button type="button" id="next-button">下一页</button>
+            </div>
+        </section>
+        <pre id="notes"></pre>
+    </main>
+    <script src="/dependencies.js"></script>
+</body>
+</html>

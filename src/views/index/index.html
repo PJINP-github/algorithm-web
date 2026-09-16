@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录</title>
+    <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+    
+    <div class="container">
+       <div class="login-box">
+            <div class="apple-btn login-apple">
+                <li class="red-btn"></li>
+                <li class="yellow-btn"></li>
+                <li class="green-btn"></li>
+            </div>
+            <div class="title">Login</div>
+            <div class="input">
+                <input type="text" id="login-user" placeholder="Input your username" autocomplete="username">
+            </div>
+            <div class="input">
+                <input type="password" id="login-password" placeholder="Input your password" autocomplete="current-password">
+            </div>
+            <button type="button" class="btn login-btn">
+                <span>登录</span>
+            </button>
+            <div class="auth-message" id="login-message" role="status" aria-live="polite"></div>
+            <div class="change-box login-change">
+                <div class="change-btn toSign">
+                    <span>去注册</span>
+                </div>
+            </div>
+       </div>
+
+       <div class="sign-box">
+            <div class="apple-btn sign-apple">
+                <li class="red-btn"></li>
+                <li class="yellow-btn"></li>
+                <li class="green-btn"></li>
+            </div>
+            <div class="title">Sign</div>
+            <div class="input">
+                <input type="text" id="sign-user" placeholder="Have A Good Name?" autocomplete="username">
+            </div>
+            <div class="input">
+                <input type="password" id="sign-password" placeholder="Keep Secret" autocomplete="new-password">
+            </div>
+            <div class="input">
+                <input type="text" id="sign-code" placeholder="Authorization Code" autocomplete="off">
+            </div>
+            <button type="button" class="btn sign-btn">
+                <span>注册</span>
+            </button>
+            <div class="auth-message" id="sign-message" role="status" aria-live="polite"></div>
+            <div class="change-box sign-change">
+                <div class="change-btn toLogin">
+                    <span>去登陆</span>
+                </div>
+            </div>
+       </div>
+    </div>
+
+    <script src="./script.js"></script>
+</body>
+</html>

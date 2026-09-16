@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模型工作区</title>
+    <link rel="stylesheet" href="/workspace.css">
+</head>
+<body>
+    <header class="topbar">
+        <div>
+            <h1>工作区</h1>
+            <p id="model-description">正在载入模型入口</p>
+        </div>
+        <div class="session">
+            <img id="session-user-icon" class="session-user-icon" alt="" aria-hidden="true">
+            <button type="button" id="logout-button">返回</button>
+        </div>
+    </header>
+
+    <main class="shell">
+        <section class="workspace-panel" id="workspace-panel"></section>
+        <aside class="side-panel">
+            <section class="jobs-box">
+                <div class="section-head">
+                    <h2>运行日志</h2>
+                    <div class="job-head-actions">
+                        <div class="job-control hidden" id="job-control">
+                            <select id="running-job-select" aria-label="运行中的任务"></select>
+                            <button type="button" id="stop-job-button">终止</button>
+                        </div>
+                        <div class="pager">
+                            <button type="button" id="log-prev">上一页</button>
+                            <span id="log-page">0/0</span>
+                            <button type="button" id="log-next">下一页</button>
+                        </div>
+                    </div>
+                </div>
+                <pre id="job-log">等待任务运行。</pre>
+            </section>
+            <section class="config-box">
+                <div class="section-head">
+                    <h2 id="config-title">YAML 配置</h2>
+                    <div class="inline-actions" id="config-actions">
+                        <div class="config-picker" id="config-picker">
+                            <button type="button" id="config-menu-button" aria-haspopup="true" aria-expanded="false">配置</button>
+                            <div class="config-menu hidden" id="config-menu" role="menu" aria-label="配置文件"></div>
+                        </div>
+                        <div class="pager hidden" id="trueno-point-pager">
+                            <button type="button" id="trueno-point-previous">上一页</button>
+                            <span id="trueno-point-page">1/1</span>
+                            <button type="button" id="trueno-point-next">下一页</button>
+                        </div>
+                        <button type="button" id="config-save">保存</button>
+                    </div>
+                </div>
+                <textarea id="config-editor" spellcheck="false"></textarea>
+                <div id="trueno-point-panel" class="hidden"></div>
+                <p id="config-message"></p>
+            </section>
+        </aside>
+    </main>
+
+    <nav class="model-tabs" id="model-tabs" aria-label="模型标签页"></nav>
+
+    <template id="file-row-template">
+        <div class="file-row">
+            <button type="button" class="file-name"></button>
+            <span class="file-size"></span>
+            <button type="button" class="download-button">下载</button>
+        </div>
+    </template>
+
+    <script src="/workspace.js"></script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件说明区</title>
+    <link rel="stylesheet" href="/file-description.css">
+</head>
+<body>
+    <header class="topbar">
+        <div><h1>文件说明区</h1><p id="session-user" aria-hidden="true"></p></div>
+        <div class="top-actions">
+            <button type="button" id="select-page-button" disabled>全选</button>
+            <button type="button" id="delete-button" class="danger" disabled>批量删除</button>
+            <button type="button" id="back-button">返回</button>
+        </div>
+    </header>
+    <main class="description-shell">
+        <section class="filter-bar">
+            <button type="button" class="active" data-kind="file">文件</button>
+            <button type="button" data-kind="directory">文件夹</button>
+            <span id="summary"></span>
+        </section>
+        <section class="description-box">
+            <div class="section-head">
+                <h2>遗留文件</h2>
+                <span id="refresh-time"></span>
+            </div>
+            <div class="entry-list" id="entry-list"></div>
+            <div class="pager hidden" id="pager">
+                <button type="button" id="previous-page">上一页</button>
+                <span id="page-label">1/1</span>
+                <button type="button" id="next-page">下一页</button>
+            </div>
+        </section>
+    </main>
+    <div class="dialog-overlay hidden" id="stale-dialog" role="dialog" aria-modal="true" aria-labelledby="stale-title">
+        <section class="stale-frame">
+            <div class="section-head">
+                <h2 id="stale-title">超过时间的遗留内容</h2>
+                <span id="stale-total"></span>
+            </div>
+            <div class="stale-group">
+                <h3 id="stale-folder-title">文件夹--文件夹内总大小</h3>
+                <ul id="stale-folders"></ul>
+            </div>
+            <div class="stale-group">
+                <h3 id="stale-file-title">文件---文件总大小</h3>
+                <ul id="stale-files"></ul>
+            </div>
+            <div class="stale-actions">
+                <button type="button" class="danger" id="stale-delete">删除</button>
+                <button type="button" class="primary" id="stale-move">移动</button>
+                <button type="button" id="stale-cancel">取消</button>
+            </div>
+        </section>
+    </div>
+    <script src="/file-description.js"></script>
+</body>
+</html>
