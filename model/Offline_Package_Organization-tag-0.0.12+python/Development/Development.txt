@@ -1,0 +1,15 @@
+1.发现annotations.sqlite3结构不合理，目前是做一个大表，然后每次导入这个大表导致速度非常慢，修改适用代码逻辑或数据库内部结构如下：例如目前有E2025110261-051、E2025110261-052、E2025090141-009三个导入的数据，那么在数据库里可以创建三个表：
+1.E2025110261-051
+2.E2025110261-052
+3.E2025090141-009
+每一个数据表里仅仅保留自己的id、point_code、recognition、audit_status、updated_at 。一个（stationSN）一个子表，而且还需要添加一个索引表，该表里放置着所有station_sn，以后脚本运行时不直接扫描所有数据库内容，而是先扫描索引表，只有找到索引表存在对应的station_sn 再从对应的station_sn信息表里取结果，避免无效读取浪费时间（索引表一定要对应所有存在的station_sn表，避免出现不存在内容station_sn表出现在索引表里又或索引表里有而实际上没有对应的station_sn表）。索引表不可以录入"testCode"的station_sn，也因而不录入station_sn=testCode 的信息表（目前数据库内有，删除station_sn=testCode的所有数据后再拆 数据库整理）
+
+
+2.python代码目前运行速度较为迟缓，考虑将所有代码替换成高性能并发无误的rust代码，请先给出实现本项目所有功能转rust是否可行的方案供予参考，再决定是否切换rust。
+
+
+
+定位参考：AGENTS.md
+日志写在：log.txt
+上下文读取：context.md
+指导要求：Guidance.md

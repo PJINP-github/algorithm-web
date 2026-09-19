@@ -1,0 +1,7 @@
+Windows 使用方式：
+
+双击运行 start.bat    # 完整数据采集与分析流程
+双击运行 run_html2xlsx.bat [xxx.html]   # HTML 转 XLSX
+
+（可选）若首次运行缺少依赖，执行：
+pip install DrissionPage requests beautifulsoup4 openpyxl

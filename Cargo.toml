@@ -1,0 +1,27 @@
+[package]
+name = "rust_upload_backed_and_fonrted_use_test-tag-0912"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+axum = { version = "0.8", features = ["multipart"] }
+#--> Tokio 官方 Web 框架，路由与提取器性能最优
+
+tokio = { version = "1", features = ["full"] }  
+#--> 异步运行时，Axum 和 spawn_blocking 必需
+
+rusqlite = { version = "0.32", features = ["bundled"] } 
+#--> SQLite 绑定，bundled 静态编译 SQLite 进二进制
+
+maud = { version = "0.27", features = ["axum"] }  
+#--> 编译期 HTML 宏，直接生成类型安全的 HTML
+
+serde = { version = "1", features = ["derive"] }  
+#--> 用于表单提取，将 HTTP 请求体反序列化为结构体
+
+serde_json = "1"
+serde_yaml = "0.9"
+
+rust_xlsxwriter = "0.79"
+#--> Rust 原生生成日志处理结果 XLSX。

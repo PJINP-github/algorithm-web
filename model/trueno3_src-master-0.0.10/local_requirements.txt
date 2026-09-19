@@ -1,0 +1,7 @@
+# 本机实现所需依赖；服务器 requirements.txt 和 model_requirements.txt 不参与本地网页。
+numpy
+pyyaml
+opencv-python
+pillow
+torch
+ultralytics

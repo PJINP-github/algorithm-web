@@ -1,0 +1,729 @@
+{
+  "status": "empty",
+  "desc": "屏柜大指示灯状态: 正常",
+  "value": "0",
+  "confidence": 0.0,
+  "roi": null,
+  "elapsed_ms": 1775.32,
+  "detections": [],
+  "stages": [
+    {
+      "index": 1,
+      "base": "base_yolo",
+      "patch": "light_pgzsd",
+      "parameter": "zsd_yb-0.0.6-fp16",
+      "model_path": "E2025070221.E2025070221-007.at-det-pg.m-yolov8det-pg+20260904.67.pt",
+      "model_resolution": "single-local-fallback",
+      "conf": 0.1,
+      "iou": 0.7,
+      "imgsz": 640,
+      "raw_count": 0,
+      "returned_count": 0,
+      "elapsed_ms": 1644.03,
+      "detections": [],
+      "models": [
+        {
+          "path": "model/E2025070221.E2025070221-007.at-det-pg.m-yolov8det-pg+20260904.67.pt",
+          "file_name": "E2025070221.E2025070221-007.at-det-pg.m-yolov8det-pg+20260904.67.pt",
+          "task": "detect",
+          "device": "cpu",
+          "class_names": {
+            "0": "dzsd_m",
+            "1": "dzsd_red",
+            "2": "dzsd_green",
+            "3": "dzsd_yellow",
+            "4": "dzsd_white",
+            "5": "dzsd_blue",
+            "6": "dzsd_other",
+            "7": "kgg_ybh",
+            "8": "kgg_ybf",
+            "9": "kgg_wyb",
+            "10": "xzsd_m",
+            "11": "xzsd_red",
+            "12": "xzsd_green",
+            "13": "xzsd_yellow",
+            "14": "xzsd_white",
+            "15": "xzsd_blue",
+            "16": "xzsd_other",
+            "17": "kqkg_up",
+            "18": "kqkg_down"
+          },
+          "parameter_count": 43644489,
+          "trainable_parameter_count": 0,
+          "layer_count": 364,
+          "operator_counts": {
+            "BatchNorm2d": 97,
+            "Bottleneck": 30,
+            "C2f": 8,
+            "Concat": 4,
+            "Conv": 97,
+            "Conv2d": 104,
+            "DFL": 1,
+            "Detect": 1,
+            "MaxPool2d": 1,
+            "ModuleList": 10,
+            "SPPF": 1,
+            "Sequential": 7,
+            "SiLU": 1,
+            "Upsample": 2
+          },
+          "operators": [
+            {
+              "name": "model",
+              "type": "Sequential"
+            },
+            {
+              "name": "model.0",
+              "type": "Conv"
+            },
+            {
+              "name": "model.0.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.0.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.0.act",
+              "type": "SiLU"
+            },
+            {
+              "name": "model.1",
+              "type": "Conv"
+            },
+            {
+              "name": "model.1.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.1.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.2",
+              "type": "C2f"
+            },
+            {
+              "name": "model.2.cv1",
+              "type": "Conv"
+            },
+            {
+              "name": "model.2.cv1.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.2.cv1.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.2.cv2",
+              "type": "Conv"
+            },
+            {
+              "name": "model.2.cv2.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.2.cv2.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.2.m",
+              "type": "ModuleList"
+            },
+            {
+              "name": "model.2.m.0",
+              "type": "Bottleneck"
+            },
+            {
+              "name": "model.2.m.0.cv1",
+              "type": "Conv"
+            },
+            {
+              "name": "model.2.m.0.cv1.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.2.m.0.cv1.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.2.m.0.cv2",
+              "type": "Conv"
+            },
+            {
+              "name": "model.2.m.0.cv2.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.2.m.0.cv2.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.2.m.1",
+              "type": "Bottleneck"
+            },
+            {
+              "name": "model.2.m.1.cv1",
+              "type": "Conv"
+            },
+            {
+              "name": "model.2.m.1.cv1.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.2.m.1.cv1.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.2.m.1.cv2",
+              "type": "Conv"
+            },
+            {
+              "name": "model.2.m.1.cv2.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.2.m.1.cv2.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.2.m.2",
+              "type": "Bottleneck"
+            },
+            {
+              "name": "model.2.m.2.cv1",
+              "type": "Conv"
+            },
+            {
+              "name": "model.2.m.2.cv1.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.2.m.2.cv1.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.2.m.2.cv2",
+              "type": "Conv"
+            },
+            {
+              "name": "model.2.m.2.cv2.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.2.m.2.cv2.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.3",
+              "type": "Conv"
+            },
+            {
+              "name": "model.3.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.3.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.4",
+              "type": "C2f"
+            },
+            {
+              "name": "model.4.cv1",
+              "type": "Conv"
+            },
+            {
+              "name": "model.4.cv1.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.4.cv1.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.4.cv2",
+              "type": "Conv"
+            },
+            {
+              "name": "model.4.cv2.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.4.cv2.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.4.m",
+              "type": "ModuleList"
+            },
+            {
+              "name": "model.4.m.0",
+              "type": "Bottleneck"
+            },
+            {
+              "name": "model.4.m.0.cv1",
+              "type": "Conv"
+            },
+            {
+              "name": "model.4.m.0.cv1.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.4.m.0.cv1.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.4.m.0.cv2",
+              "type": "Conv"
+            },
+            {
+              "name": "model.4.m.0.cv2.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.4.m.0.cv2.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.4.m.1",
+              "type": "Bottleneck"
+            },
+            {
+              "name": "model.4.m.1.cv1",
+              "type": "Conv"
+            },
+            {
+              "name": "model.4.m.1.cv1.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.4.m.1.cv1.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.4.m.1.cv2",
+              "type": "Conv"
+            },
+            {
+              "name": "model.4.m.1.cv2.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.4.m.1.cv2.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.4.m.2",
+              "type": "Bottleneck"
+            },
+            {
+              "name": "model.4.m.2.cv1",
+              "type": "Conv"
+            },
+            {
+              "name": "model.4.m.2.cv1.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.4.m.2.cv1.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.4.m.2.cv2",
+              "type": "Conv"
+            },
+            {
+              "name": "model.4.m.2.cv2.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.4.m.2.cv2.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.4.m.3",
+              "type": "Bottleneck"
+            },
+            {
+              "name": "model.4.m.3.cv1",
+              "type": "Conv"
+            },
+            {
+              "name": "model.4.m.3.cv1.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.4.m.3.cv1.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.4.m.3.cv2",
+              "type": "Conv"
+            },
+            {
+              "name": "model.4.m.3.cv2.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.4.m.3.cv2.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.4.m.4",
+              "type": "Bottleneck"
+            },
+            {
+              "name": "model.4.m.4.cv1",
+              "type": "Conv"
+            },
+            {
+              "name": "model.4.m.4.cv1.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.4.m.4.cv1.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.4.m.4.cv2",
+              "type": "Conv"
+            },
+            {
+              "name": "model.4.m.4.cv2.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.4.m.4.cv2.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.4.m.5",
+              "type": "Bottleneck"
+            },
+            {
+              "name": "model.4.m.5.cv1",
+              "type": "Conv"
+            },
+            {
+              "name": "model.4.m.5.cv1.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.4.m.5.cv1.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.4.m.5.cv2",
+              "type": "Conv"
+            },
+            {
+              "name": "model.4.m.5.cv2.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.4.m.5.cv2.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.5",
+              "type": "Conv"
+            },
+            {
+              "name": "model.5.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.5.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.6",
+              "type": "C2f"
+            },
+            {
+              "name": "model.6.cv1",
+              "type": "Conv"
+            },
+            {
+              "name": "model.6.cv1.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.6.cv1.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.6.cv2",
+              "type": "Conv"
+            },
+            {
+              "name": "model.6.cv2.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.6.cv2.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.6.m",
+              "type": "ModuleList"
+            },
+            {
+              "name": "model.6.m.0",
+              "type": "Bottleneck"
+            },
+            {
+              "name": "model.6.m.0.cv1",
+              "type": "Conv"
+            },
+            {
+              "name": "model.6.m.0.cv1.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.6.m.0.cv1.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.6.m.0.cv2",
+              "type": "Conv"
+            },
+            {
+              "name": "model.6.m.0.cv2.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.6.m.0.cv2.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.6.m.1",
+              "type": "Bottleneck"
+            },
+            {
+              "name": "model.6.m.1.cv1",
+              "type": "Conv"
+            },
+            {
+              "name": "model.6.m.1.cv1.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.6.m.1.cv1.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.6.m.1.cv2",
+              "type": "Conv"
+            },
+            {
+              "name": "model.6.m.1.cv2.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.6.m.1.cv2.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.6.m.2",
+              "type": "Bottleneck"
+            },
+            {
+              "name": "model.6.m.2.cv1",
+              "type": "Conv"
+            },
+            {
+              "name": "model.6.m.2.cv1.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.6.m.2.cv1.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.6.m.2.cv2",
+              "type": "Conv"
+            },
+            {
+              "name": "model.6.m.2.cv2.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.6.m.2.cv2.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.6.m.3",
+              "type": "Bottleneck"
+            },
+            {
+              "name": "model.6.m.3.cv1",
+              "type": "Conv"
+            },
+            {
+              "name": "model.6.m.3.cv1.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.6.m.3.cv1.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.6.m.3.cv2",
+              "type": "Conv"
+            },
+            {
+              "name": "model.6.m.3.cv2.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.6.m.3.cv2.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.6.m.4",
+              "type": "Bottleneck"
+            },
+            {
+              "name": "model.6.m.4.cv1",
+              "type": "Conv"
+            },
+            {
+              "name": "model.6.m.4.cv1.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.6.m.4.cv1.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.6.m.4.cv2",
+              "type": "Conv"
+            },
+            {
+              "name": "model.6.m.4.cv2.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.6.m.4.cv2.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.6.m.5",
+              "type": "Bottleneck"
+            },
+            {
+              "name": "model.6.m.5.cv1",
+              "type": "Conv"
+            },
+            {
+              "name": "model.6.m.5.cv1.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.6.m.5.cv1.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.6.m.5.cv2",
+              "type": "Conv"
+            },
+            {
+              "name": "model.6.m.5.cv2.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.6.m.5.cv2.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.7",
+              "type": "Conv"
+            },
+            {
+              "name": "model.7.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.7.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.8",
+              "type": "C2f"
+            },
+            {
+              "name": "model.8.cv1",
+              "type": "Conv"
+            },
+            {
+              "name": "model.8.cv1.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.8.cv1.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.8.cv2",
+              "type": "Conv"
+            },
+            {
+              "name": "model.8.cv2.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.8.cv2.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.8.m",
+              "type": "ModuleList"
+            },
+            {
+              "name": "model.8.m.0",
+              "type": "Bottleneck"
+            },
+            {
+              "name": "model.8.m.0.cv1",
+              "type": "Conv"
+            },
+            {
+              "name": "model.8.m.0.cv1.conv",
+              "type": "Conv2d"
+            },
+            {
+              "name": "model.8.m.0.cv1.bn",
+              "type": "BatchNorm2d"
+            },
+            {
+              "name": "model.8.m.0.cv2",
+              "type": "Conv"
+            },
+            {
+              "name": "model.8.m.0.cv2.conv",
+              "type": "Conv2d"
+            }
+          ],
+          "stride": [
+            8.0,
+            16.0,
+            32.0
+          ],
+          "overrides": {
+            "task": "detect",
+            "data": "/tmp/oAcWBkA00XeIRsE-/train.yaml",
+            "imgsz": 640,
+            "single_cls": false,
+            "model": "D:\\Work\\底层原理\\trueno3_src-master-0.0.10\\model\\E2025070221.E2025070221-007.at-det-pg.m-yolov8det-pg+20260904.67.pt",
+            "device": "cpu"
+          }
+        }
+      ]
+    }
+  ]
+}

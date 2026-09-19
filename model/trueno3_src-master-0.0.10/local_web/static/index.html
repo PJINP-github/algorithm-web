@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trueno Local Lab</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">T3</div>
+      <div>
+        <div class="brand-name">Trueno Local Lab</div>
+        <div class="brand-subtitle">模型调用与结果验证</div>
+      </div>
+    </div>
+    <div class="runtime-status" id="runtimeStatus">
+      <span class="status-dot"></span>
+      <span>连接中</span>
+    </div>
+  </header>
+
+  <main class="app-shell">
+    <aside class="control-panel">
+      <div class="panel-heading">
+        <div>
+          <span class="eyebrow">CONTROL</span>
+          <h1>推理配置</h1>
+        </div>
+        <button class="icon-button" id="refreshConfigButton" title="刷新配置" aria-label="刷新配置">↻</button>
+      </div>
+
+      <section class="control-section">
+        <label class="field-label" for="abilitySelect">识别能力</label>
+        <select id="abilitySelect" class="field-control"></select>
+        <div id="abilityMeta" class="field-hint">读取模型描述中...</div>
+      </section>
+
+      <section class="control-section">
+        <label class="field-label" for="modelSelect">本地模型</label>
+        <select id="modelSelect" class="field-control"></select>
+        <div id="modelMeta" class="field-hint">作为所有阶段的统一回退模型</div>
+      </section>
+
+      <section class="control-section pipeline-section">
+        <div class="section-line">
+          <span class="field-label">流水线模型</span>
+          <span id="stageCount" class="field-hint">0 段</span>
+        </div>
+        <div id="stagePlan" class="stage-plan">
+          <div class="field-hint">选择能力后显示各阶段模型</div>
+        </div>
+      </section>
+
+      <section class="control-section compact-grid">
+        <div>
+          <label class="field-label" for="confInput">置信度</label>
+          <input id="confInput" class="field-control" type="number" min="0" max="1" step="0.01" value="0.25">
+        </div>
+        <div>
+          <label class="field-label" for="iouInput">IoU</label>
+          <input id="iouInput" class="field-control" type="number" min="0" max="1" step="0.01" value="0.7">
+        </div>
+        <div>
+          <label class="field-label" for="imgszInput">输入尺寸</label>
+          <input id="imgszInput" class="field-control" type="number" min="32" step="32" value="640">
+        </div>
+        <div>
+          <label class="field-label">设备</label>
+          <div id="deviceValue" class="field-readonly">检测中</div>
+        </div>
+      </section>
+
+    </aside>
+
+    <section class="workspace">
+      <div class="workspace-toolbar">
+        <div>
+          <span class="eyebrow">IMAGE WORKSPACE</span>
+          <h2>图像预览</h2>
+        </div>
+        <div class="toolbar-actions">
+          <span id="canvasSize" class="toolbar-meta">等待图片</span>
+          <button class="icon-button" id="resetImageButton" title="清除图片" aria-label="清除图片">×</button>
+        </div>
+      </div>
+      <div class="canvas-stage" id="canvasStage">
+        <div class="empty-workspace" id="emptyWorkspace">
+          <div class="empty-symbol">＋</div>
+          <strong>导入一张图片开始</strong>
+          <span>结果会显示在右侧面板</span>
+        </div>
+        <canvas id="imageCanvas" hidden></canvas>
+        <div class="canvas-overlay" id="canvasOverlay" hidden>
+          <span id="canvasOverlayText">拖拽绘制 ROI</span>
+        </div>
+      </div>
+      <div class="workspace-footer">
+        <span id="roiHint">ROI: 全图</span>
+        <span id="interactionState">就绪</span>
+      </div>
+    </section>
+
+    <aside class="result-panel">
+      <div class="panel-heading result-heading">
+        <div>
+          <span class="eyebrow">INFERENCE OUTPUT</span>
+          <h2>推理结果</h2>
+        </div>
+        <span id="resultState" class="result-badge neutral">待运行</span>
+      </div>
+      <div id="resultSummary" class="result-summary empty-result">
+        <strong>还没有推理结果</strong>
+        <span>选择能力和图片后开始</span>
+      </div>
+      <div class="result-section">
+        <div class="section-line">
+          <h3>检测分类</h3>
+          <span id="detectionCount" class="count-label">0 项</span>
+        </div>
+        <div id="detectionList" class="detection-list empty-list">暂无检测框</div>
+      </div>
+      <div class="result-section">
+        <div class="section-line">
+          <h3>流水线</h3>
+          <span id="elapsedValue" class="count-label">-</span>
+        </div>
+        <div id="stageList" class="stage-list empty-list">等待推理</div>
+      </div>
+      <div class="result-section">
+        <div class="section-line">
+          <h3>整合上下文</h3>
+          <span id="contextCount" class="count-label">0 项</span>
+        </div>
+        <div id="contextList" class="context-list empty-list">推理后显示各阶段返回值</div>
+      </div>
+      <div class="result-section operators-section">
+        <div class="section-line">
+          <h3>模型算子</h3>
+          <button class="text-button" id="operatorToggleButton">展开</button>
+        </div>
+        <div id="operatorList" class="operator-list empty-list">推理后显示模型结构</div>
+      </div>
+
+      <section class="control-section action-strip">
+        <div class="action-row">
+          <span class="field-label">标注</span>
+          <div class="annotation-tools">
+            <label class="tool-option">
+              <input id="roiMode" type="radio" name="annotationMode" value="roi" checked>
+              <span>ROI</span>
+            </label>
+            <label class="tool-option">
+              <input id="pointMode" type="radio" name="annotationMode" value="point">
+              <span>点</span>
+            </label>
+            <label class="tool-option">
+              <input id="boxMode" type="radio" name="annotationMode" value="box">
+              <span>框</span>
+            </label>
+            <label class="tool-option">
+              <input id="adjustMode" type="radio" name="annotationMode" value="adjust">
+              <span>修框</span>
+            </label>
+          </div>
+          <input id="helperPointName" class="field-control mini-input" placeholder="点名称">
+          <select id="helperStageSelect" class="field-control mini-input" title="辅助框所属阶段"></select>
+          <button class="text-button" id="clearAnnotationsButton">清除标注</button>
+        </div>
+        <div class="action-row">
+          <label class="upload-chip" for="imageInput">选择图片</label>
+          <input id="imageInput" type="file" accept="image/*" hidden>
+          <span id="imageMeta" class="action-meta">未选择</span>
+          <span id="roiValue" class="roi-chip">全图推理</span>
+          <button class="text-button" id="clearRoiButton">清除ROI</button>
+          <button class="primary-button compact" id="inferButton" disabled>
+            <span>▶</span>
+            <span>开始推理</span>
+          </button>
+        </div>
+        <div class="action-row hints-row">
+          <span id="annotationValue" class="field-hint">ROI 全图 · 点 0 · 框 0 · 修正 0</span>
+          <span class="field-hint">在预览图上拖拽绘制矩形</span>
+        </div>
+        <div id="errorMessage" class="error-message" hidden></div>
+      </section>
+    </aside>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

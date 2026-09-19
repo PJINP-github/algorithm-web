@@ -1,0 +1,35 @@
+model:
+  training_note_max_rows: 3   # 需要收集的有效行数
+  training_note:
+    enabled: true
+    mode: contains
+    blocked_substrings:
+      - 测试
+      - 勿使用
+      - 标注方案对比
+    case_sensitive: false
+    max_rows_to_check: 10
+  category_match:
+    mode: longest_substring
+    case_sensitive: false
+
+# 其他配置保持不变
+collection:
+  max_pages: 3
+
+task_filter:
+  enabled: false
+  logic: any
+  rules:
+    - column: 标注说明
+      contains:
+        - 测试
+        - 勿使用
+        - 标注方案对比
+      mode: contains
+      case_sensitive: false
+
+summary:
+  site_generalize_substrings:
+    - 中广核
+    - 建平

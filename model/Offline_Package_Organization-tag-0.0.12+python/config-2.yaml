@@ -1,0 +1,402 @@
+# 拆包阈值：N 模式下总图片数超过该值时，会按 algoType / 阈值拆成多个包。
+split_limit: 3500
+
+# result-2.xlsx 算法类别比对源文件。
+result2_xlsx_path: '../../Weekly-Report-Print-tag-0.0.8+python/date_review/0Work/result-2.xlsx'
+
+
+# result-2.xlsx 算法名称到清单算法名称的兼容匹配。
+# target 是清单中的算法名称，matches 是 result-2.xlsx 中允许的写法。
+result2_algorithm_mapping_rules:
+  - target: 接地刀闸状态
+    matches:
+      - 接地刀闸状态
+      - 接地刀闸状态识别
+      - 接地刀闸
+  - target: 外观识别
+    matches:
+      - 外观识别
+  - target: mn屏柜小指示灯状态
+    matches:
+      - mn版屏柜小指示灯
+      - mn版屏柜小指示灯状态
+      - mn屏柜小指示灯
+  - target: mn屏柜大指示灯状态
+    matches:
+      - mn版屏柜大指示灯
+      - mn版屏柜大指示灯状态
+      - mn屏柜大指示灯
+  - target: 屏柜旋钮把手状态
+    matches:
+      - 屏柜旋钮把手状态
+      - 屏柜旋钮把手
+  - target: 避雷器滚轮计数器读数
+    matches:
+      - 避雷器滚轮计数器读数
+      - 避雷器滚轮计数器
+  - target: 避雷器指针计数器读数
+    matches:
+      - 避雷器指针计数器读数
+      - 避雷器指针计数器
+  - target: 避雷器泄露电流表读数
+    matches:
+      - 避雷器泄露电流表读数
+      - 避雷器泄漏电流表读数
+      - 避雷器泄露电流表
+  - target: SF6气压表读数
+    matches:
+      - SF6气压表读数
+      - SF6气压表
+  - target: 变压器油温表读数
+    matches:
+      - 变压器油温表读数
+      - 变压器油温表
+  - target: 变压器指针油位表读数
+    matches:
+      - 变压器指针油位表读数
+      - 变压器指针油位表
+  - target: 变压器管式油位计读数
+    matches:
+      - 变压器管式油位计读数
+      - 变压器管式油位计
+      - 管式油位计
+  - target: 其他型分合指示
+    matches:
+      - 其他型分合指示
+      - 其他型分合
+  - target: 其他型储能指示
+    matches:
+      - 其他型储能指示
+      - 其他型储能
+  - target: 隔离开关状态识别
+    matches:
+      - 隔离开关状态识别
+      - 隔离开关状态
+  - target: 电流电压表
+    matches:
+      - 电流电压表
+      - 电流电压表读数
+  - target: 有载调压档位表读数
+    matches:
+      - 有载调压档位表读数
+      - 有载调压档位表
+  - target: mn屏柜保护压板状态
+    matches:
+      - mn版屏柜保护压板状态
+      - 屏柜保护压板状态
+  - target: mn屏柜空开状态
+    matches:
+      - mn版屏柜空开状态
+      - 屏柜空开状态
+  - target: 避雷器滚轮计数器读数
+    matches:
+      - 数显避雷器滚轮计数器读数
+
+# Web 审核导出时，是否把“问题图片”也保留在 accuracy 的 imagesData 中。
+# y=保留，n=不保留。
+save_problem_images: y
+
+# 排序规则：recognition 为空字符串时，是否排到当前 algoType 的最后。
+empty_recognition_last: y
+
+# 排序规则：是否在同一个 algoType 内，把相同 recognition 的图片聚到一起。
+cluster_by_recognition: y
+
+# Web 默认图片缩放比例。1 表示完整适配显示；大于 1 会默认放大。
+default_zoom: 1
+
+# Web 是否显示“按时点击”按钮和 ms 下拉框。
+# 只有 yes 才显示；其他值都会隐藏且禁用，避免客户看到。
+show_auto_click: yes
+
+# Web 是否显示“一键为对”按钮。
+# 只有 yes 才显示；按钮只会把当前 algoType 类别全部判定为“对”，然后跳到下一个类别。
+show_mark_all_correct: yes
+
+# Web“按时点击”的可选时间，单位 ms；页面默认选择第一项。
+auto_click_times_ms:
+  - 450
+  - 750
+  - 950
+
+
+# Web 默认判错规则：未标注图片的 recognition 命中这些字符串时，页面默认选中“错”。
+# 开启“按时点击”后，命中项到时间会自动保存为“错”并跳到下一张。
+default_wrong_keywords:
+  - 失败
+
+# Web 默认问题图片规则：未标注图片的 recognition 命中这些字符串时，页面默认选中“问题图片”。
+# 优先级高于 default_wrong_keywords；开启“按时点击”后，命中项会自动保存为“问题图片”。
+default_problem_keywords:
+  - 分析为空
+  - 设备不在线
+
+# 问题图片清单.xlsx 额外收录规则。
+# 默认 n：只收录人工/自动判定为“错”和“问题图片”的点位。
+# 设置 y 后，会额外把 recognition 命中 extra_xlsx_recognition_keywords 的点位也写入清单。
+extra_xlsx_recognition_enabled: n
+
+# 清单是否显示 auditStatus=1 的“算法正常”点位。
+# 只有 yes 才显示，且固定排在“算法不准”与“问题图片”之后。
+show_algorithm_normal: yes
+
+# 清单图片宽度小于 8 厘米时，是否按比例放大到 8.41 厘米。
+checklist_image_width_enabled: yes
+
+# extra_xlsx_recognition_enabled: y 时生效。
+# 非空字符串表示 recognition 包含该子字符串；"" 表示 recognition 为空。
+extra_xlsx_recognition_keywords:
+  - ""
+
+# 导出 newwrap/newkeywords.txt 的分组关键字。
+# 非空字符串表示 recognition 包含该子字符串；"" 表示 recognition 为空。
+newkeywords:
+  - 失败
+  - 为空
+  - 未识别
+  - ""
+  - 设备不在线
+
+# Y/N/M 前置归并时的关键字排序和命中图片复制规则。
+# recognition 命中这些字符串的图片会排到最后，并复制到 output 下的 image_日期 文件夹。
+keywords:
+  - 失败
+  - 为空
+  - 未识别
+
+# Web hotkey settings. Values use browser KeyboardEvent.key names.
+# Defaults keep original behavior: arrows move/mark, 0 marks correct, 2 toggles auto click.
+web_hotkeys:
+  previous: ArrowLeft
+  next: ArrowRight
+  correct: "0"
+  problem: ArrowUp
+  wrong: ArrowDown
+  auto_click_toggle: "2"
+
+# Web: show same-recognition batch mark button and result dropdown only when yes.
+show_mark_same_recognition: yes
+
+# Web 点位名称末端显示配置。
+End_open: true
+End_characters: 7
+End_character_color: green
+
+# 清单“解决方案”匹配规则。
+# 判断情况和识别结果均按完整文本匹配。
+Assess_the_situation:
+  - situation: 算法不准
+    Recognitio_Result:
+      Result: 识别为空
+      resolve: 1.确定预置位标定是否正常 2.确保标定无问题的前提下，重新采集图片交予算法训练，预计下周更新优化
+
+
+  - situation: 算法不准
+    Recognitio_Result:
+      Result: 未识别
+      resolve: 算法涉入
+
+  - situation: 算法不准
+    Recognitio_Result:
+      Result: 正常
+      resolve: 1.确定预置位标定是否正常 2.确保标定无问题的前提下，重新采集图片交予算法训练，预计下周更新优化
+
+  - situation: 算法不准
+    Recognitio_Result:
+      Result: 分析失败
+      resolve: 1.确定预置位标定是否正常 2.确保标定无问题的前提下，重新采集图片交予算法训练，预计下周更新优化
+
+  - situation: 算法不准
+    Recognitio_Result:
+      Result: 未发现异常
+      resolve: 1.确定预置位标定是否正常 2.确保标定无问题的前提下，重新采集图片交予算法训练，预计下周更新优化
+
+  - situation: 问题图片
+    Recognitio_Result:
+      Result: 分析失败
+      resolve: 1.图片存在模糊、黑白等影响识别因素
+
+
+  - situation: 问题图片
+    Recognitio_Result:
+      Result: 识别为空
+      resolve: 1.图片存在模糊、黑白等影响识别因素
+
+
+
+  - situation: 问题图片
+    Recognitio_Result:
+      Result: 算法调用超时
+      resolve: 1.系统偶发性异常或算法并发数不够,需要重新预置位验证
+
+
+  - situation: 问题图片
+    Recognitio_Result:
+      Result: 未识别
+      resolve: 1.图片存在模糊或黑白等无法识别情况，需要现场人员处理
+
+
+
+# 清单“负责人”匹配规则。
+# recognition 命中关键字时写入负责人；负责人只能是：算法调试、现场调试、误报无需调试。
+responsible_rules:
+  设备不在线: 
+  未识别: 
+  失败: 
+  为空: 
+
+# 算法别名映射规则。
+# matches 中的算法 ID 显示为对应的 target；未匹配的算法保留原始名称。
+mapping_rules:
+  - target: mn屏柜大指示灯状态
+    matches:
+      - light_pgdzsd_mn
+  - target: mn屏柜小指示灯状态
+    matches:
+      - light_pgxzsd_mn
+  - target: mn屏柜保护压板状态
+    matches:
+      - switch_pgbhyb_mn
+  - target: mn屏柜空开状态
+    matches:
+      - switch_pgkqkg_mn
+  - target: SF6气压表读数
+    matches:
+      - meter_sf6_qy
+  - target: 变压器油温表读数
+    matches:
+      - meter_byq_yw
+  - target: 指针压力表
+    matches:
+      - meter_zz_ylb
+  - target: 变压器指针油位表读数
+    matches:
+      - meter_byq_zzyw
+  - target: 避雷器泄露电流表读数
+    matches:
+      - meter_blq_xl
+  - target: 电流电压表
+    matches:
+      - meter_dldyb
+  - target: 有载调压档位表读数
+    matches:
+      - meter_yzty_dw
+  - target: 变压器油枕油位视窗读数
+    matches:
+      - meter_byq_yzywsc
+  - target: CT_PT油位窗读数
+    matches:
+      - meter_ct_pt
+  - target: 套管油位窗读数
+    matches:
+      - meter_tgywc
+  - target: 避雷器指针计数器读数
+    matches:
+      - meter_blq_zzjs
+  - target: LED数值显示器读数
+    matches:
+      - meter_digital_led
+  - target: LCD数值显示器读数
+    matches:
+      - meter_digital_lcd
+  - target: 有载调压表调节次数表
+    matches:
+      - meter_digital_yztygl
+  - target: 隔离开关状态识别
+    matches:
+      - isolator_glkg
+  - target: 接地刀闸状态
+    matches:
+      - isolator_jddz_p
+  - target: 屏柜旋钮把手状态
+    matches:
+      - switch_pgxnbs_p
+  - target: 其他型分合指示
+    matches:
+      - switch_fh_other
+  - target: 其他型储能指示
+    matches:
+      - switch_cn_other
+  - target: 外观识别
+    matches:
+      - all_qxsb
+  - target: 越线闯入
+    matches:
+      - yxcr
+  - target: 未穿安全帽
+    matches:
+      - wcaqm
+  - target: 火灾烟雾
+    matches:
+      - hzyw
+  - target: 吸烟
+    matches:
+      - xy
+  - target: 变压器管式油位计读数
+    matches:
+      - meter_gsywj
+  - target: 数显电流表
+    matches:
+      - meter_digital_dlb
+  - target: 避雷器滚轮计数器读数
+    matches:
+      - meter_digital_blqgl
+  - target: 数显电压表
+    matches:
+      - meter_digital_dyb
+  - target: 数显压力表
+    matches:
+      - meter_digital_ylb
+  - target: 数显温度读数
+    matches:
+      - meter_kgg_envTemp
+  - target: 数显湿度读数
+    matches:
+      - meter_kgg_envHum
+  - target: 数显避雷器泄漏电流实时值
+    matches:
+      - meter_digital_xl_lastA
+  - target: 数显避雷器动作次数
+    matches:
+      - meter_digital_xl_times
+  - target: 未穿工装
+    matches:
+      - wcgz
+  - target: 人员闯入
+    matches:
+      - person
+  - target: 明火
+    matches:
+      - fire
+  - target: 烟雾
+    matches:
+      - smoke
+  - target: 未穿安全带
+    matches:
+      - wcaqd
+  - target: 物品遗漏
+    matches:
+      - wpyl
+  - target: 渗漏油地面油污
+    matches:
+      - sly_dmyw
+  - target: 反置_变压器指针油位表读数
+    matches:
+      - meter_byq_zzyw_reverse
+  - target: 其他非图像算法类别
+    matches:
+      - unknown
+  - target: 套管液位计
+    matches:
+      - meter_tgywj
+
+# 清单“解决方案”列的下拉选项，按此处顺序显示。
+solution_optional:
+  - 1.确定预置位标定是否正常 2.确保标定无问题的前提下，重新采集图片交予算法训练，预计下周更新优化
+  - 1.图片存在模糊等影响识别因素 2.轻度模糊可以尝试重新采集，解决稍微模糊时的识别准确率，但是最好直接解决模糊问题，避免偶发性无法捕获图像目标
+  - 1.偏移，想办法调整角度，尽可能正面面对识别对象 2.重新标定 3.仍无法识别再采集图片重新训练，但识别效果因为角度不好，缺失识别对象可能识别效果不好
+  - 1.摄像头聚焦不清、遮掩或显示屏不显示又或黑白等图片内无识别对象性质问题，需要现场及时处理
+  - 1.距离过远，需要识别对象占据图像80%以上大小，避免过小无法捕获识别对象或识别条件等算法识别必要因素
+  - 1.系统偶发性异常或算法并发数不够、需要重新预置位验证
+  - 1.优先更新最新算法模型，用于验证，无效后再采集针对优化
+  - 1.算法存在识别目标，但是系统无输出结果 2.尝试预置位重新验证

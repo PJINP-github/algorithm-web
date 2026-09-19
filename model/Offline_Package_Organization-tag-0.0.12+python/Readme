@@ -1,0 +1,59 @@
+# sources 重构工具
+
+## 入口
+
+- 双击 `run_rebuild.bat`
+- 或直接运行 `python rebuild_sources.py`
+
+## 功能
+
+1. 解压 `sources` 目录下的外层 ZIP。
+2. 解压其中所有 `accuracy_*.zip` 和 `image_result_*.zip`。
+3. 按数字后缀配对并合并。
+4. 更新 `taskID`、时间字段和相关 `id`。
+5. 保持 `projectSN`、`stationSN` 不变。
+6. 根据 `config.yaml` 的关键字，对 `accuracy.json` 里的 `recognition` 做块内排序。
+7. 命中的图片会复制到 `image_YYYYMMDD/`，文件名改成 `recognition_pointName` 形式。
+8. 重打包生成新的外层 ZIP、两个内层 ZIP，并写日志到 `log.txt`。
+9. `Y/N` 与 `H` 将已确认标注写入根目录 `annotations.sqlite3`；`H` 审核模式启动时复用匹配的历史标注，`M` 不读取或写入 SQLite。
+
+## 配置
+
+`config.yaml` 当前只需要维护关键字顺序：
+
+```yaml
+keywords:
+  - 红灯亮
+  - 绿灯亮
+  - 灯灭
+```
+
+顺序越靠前，优先级越高。
+
+## 输出
+
+脚本默认输出到 `output/`，每个外层包会生成一个独立目录，里面包含：
+
+- 新的外层 ZIP
+- `accuracy_*.zip`
+- `image_result_*.zip`
+- `image_YYYYMMDD/` 目录
+
+## 说明
+
+- 图片重命名会先做非法字符清理，再避免重名覆盖。
+- 外层 ZIP 内只保留两个内层 ZIP。
+- `log.txt` 记录解压、归并、排序、改名、打包和校验过程。
+- SQLite 使用 `station_index` 保存有效站点；每个 `stationSN` 对应同名子表，子表只保存 `id`、`point_code`、`recognition`、`audit_status`、`updated_at`。
+- SQLite 记录按 `stationSN + pointCode` 唯一覆盖；只有 `pointCode` 和 `recognition` 同时匹配时才自动复用。`testCode` 永不写入。
+- 可用 `--database PATH` 指定 SQLite 数据库路径；可用 `--collection-reports` 单独生成采集点位清单。
+- `run_rebuild.bat` 菜单：`1=M` 无 SQLite 审核、`2=H` 含 SQLite 审核、`3=Y` 不拆包、`4=N` 拆包、`5=R` 生成采集清单；回车默认 `1`。命令行仍兼容 `M/H/Y/N/R`。
+
+## 数据库检查
+
+- `python Database_Check.py 1 --input-dir newwrap`：导入目录下审核包的已标注 `accuracy.json`。
+- `python Database_Check.py 2 --sql annotations.sql`：备份当前数据库后导入 SQL。
+- `python Database_Check.py 3`：按 `stationSN` 分工作表导出 Excel。
+- `python Database_Check.py 4`：备份并将旧 `annotations` 大表拆分为站点子表，然后校验索引一致性。
+
+Rust 迁移可行性、分阶段方案和风险见 [plan.md](plan.md)。

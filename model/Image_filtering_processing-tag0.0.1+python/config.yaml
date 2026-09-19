@@ -1,0 +1,89 @@
+similarity:
+  method: multi_feature
+  color_hist_bins: 32
+  gradient_size: 48
+  use_ssim: true
+  ssim_size: 96
+  dhash_size: 8
+  weight_color: 0.45
+  weight_gradient: 0.45
+  weight_ssim: 0.10
+  low_threshold: 0.30
+  combined_threshold: 0.55
+  high_score_bypass: 0.80
+  color_min_corr: 0.7
+  gradient_min_corr: 0.5
+  ssim_min_score: 0.35
+  dhash_veto_distance: 28
+  strict_mode: true
+  layout_size: 24
+  layout_min_corr: 0.6
+  hash_size: 8
+  hash_max_distance: 10
+  histogram_min_corr: 0.85
+
+grouping:
+  compare_mode: anchor
+  max_consecutive_dissimilar: 2
+  random_second_compare: false
+  random_seed: 42
+  pair_decision_threshold: 0.5
+
+blur:
+  enabled: true
+  laplacian_threshold: 60.0
+  skip_blurry: true
+  count_as_dissimilar: false
+
+scan:
+  recursive: true
+  process_root: true
+  natural_sort: true
+  extensions: [.png, .jpg, .jpeg, .bmp, .webp, .tif, .tiff]
+  folder_name_patterns: []
+  folder_name_exclude: []
+
+output:
+  filename: work.yaml
+  overwrite: true
+
+  xlsx_enabled: true
+  xlsx_filename: "{folder_name}-样本分组展示.xlsx"   # 支持 {folder_name} 占位符
+  xlsx_image_height_px: 80
+  xlsx_max_name_col_width: 80
+  xlsx_cell_padding_px: 8
+
+# ============ 后处理（在生成 xlsx 之后执行）============
+post_process:
+  # 是否把该文件夹内所有原始图片打成一个 zip 备份到同目录
+  backup_zip: true
+  backup_zip_filename: "{folder_name}_backup.zip"
+
+  # 全局默认规则（当没有匹配到 setting 时使用）
+  fuzzy_removal: true
+  same_category_group_quantity_retention: 3    # 每组最多保留张数；0 或 null 表示不启用
+
+  # 是否启用按"文件夹名"匹配的额外规则（优先级高于全局）
+  additional_automatic_folder_naming_processing: true
+  settings:
+    one:
+      folders:
+        - light_pgxzsd_mn
+        - all_qxsb
+        - switch_pgxnbs_p
+        - meter_digital_led
+        - switch_pgxnbs_p
+      fuzzy_removal: true
+      same_category_group_quantity_retention: 3
+    two:
+      folders:
+        - isolator_glkg
+        - isolator_jddz_p
+        - meter_blq_xl
+        - meter_blq_zzjs
+        - meter_byq_yw
+        - meter_digital_blqgl
+        - switch_fh_other
+        - meter_yzty_dw
+      fuzzy_removal: true
+      same_category_group_quantity_retention: 5

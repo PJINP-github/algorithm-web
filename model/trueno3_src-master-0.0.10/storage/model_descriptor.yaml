@@ -1,0 +1,1150 @@
+version: 0.0.1
+class: deploy
+note: support_als
+
+##########cls_names锚点##########
+all_qxsb_cls_names: &all_qxsb_cls_names {0: 'person', 1: 'gzzc', 2: 'wcgz', 3: 'aqmzc', 4: 'wcaqm', 5: 'hand', 6: 'hand_xy', 7: 'bj_bpmh', 8: 'bj_wkps', 9: 'byq_hxq', 10: 'hxq_gjbs', 11: 'hxq_gjtps', 12: 'ywzt_yfzc', 13: 'ywzt_yfyc', 14: 'xmbhzc', 15: 'xmbhyc', 16: 'kgg_ybh', 17: 'kgg_ybf', 18: 'yw_gkxfw', 19: 'yw_nc', 20: 'gbps', 21: 'sly_dmyw', 22: 'jyz_pl', 23: 'kgg_wyb', 24: 'sly_bjbmyw', 25: 'hxq_yfps', 26: 'bj_sf6', 27: 'bj_blq', 28: 'bj_yljdq', 29: 'bj_cyg_gsywj', 30: 'bj_cyg_zzywj', 31: 'bj_tg_zzywc', 32: 'bj_ylb', 33: 'bj_ywb', 34: 'bj_sx', 35: 'mb_ckbh', 36: 'bj_dlb', 37: 'bj_dyb', 38: 'bj_yzfj', 39: 'gcc_gm', 40: 'bj_bpps', 41: 'bj_bpps_gsywj', 42: 'bjdsyc_zz', 43: 'bjdszc_zz', 44: 'bj_sx_dsyc', 45: 'bj_sx_dszc', 46: 'bj_bpqx', 47: 'gcc_ps', 48: 'gcc_mh', 49: 'gcc_qx', 50: 'jsxs_ecjxh', 51: 'jsxs_jdyxx', 52: 'jsxs_ddjt', 53: 'jsxs_ddyx', 54: 'ecjxh', 55: 'jdyxx', 56: 'ddjt', 57: 'bmwh', 58: 'yx', 59: 'yxdgsg', 60: 'pzqcd', 61: 'jyhbx', 62: 'drqgd', 63: 'hzyw', 64: 'cysb_cyg', 65: 'cysb_tg', 66: 'cysb_lqq', 67: 'ylsff', 68: 'hxq_yfqs', 69: 'hxq_gjzc', 70: 'kk_f', 71: 'zsd_l', 72: 'kk_h', 73: 'zsd_m', 74: 'ws_ywyc', 75: 'yljdq_flow', 76: 'ws_ywzc', 77: 'yljdq_stop', 78: 'mbhp', 79: 'bj_yuan', 80: 'bj_fang', 81: 'bj_wsjdq', 82: 'cnkg', 83: 'jyhzc', 84: 'pzqzc', 85: 'drqzc', 86: 'cysb_sgz', 87: 'xmbhyc_sn', 88: 'xmbhzc_sn', 89: 'cysb_qyb', 90: 'bj_jqh', 91: 'bj_cyg_chywj', 92: 'bj_hgq_ywc', 93: 'bj_tg_ywc', 94: 'bj_hgq_ysywc', 95: 'bj_tg_ysywc', 96: 'cnkg_ycn', 97: 'cnkg_wcn', 98: 'bj_bpqx_gsywj', 99: 'bj_bpmh_gsywj', 100: 'hxq_bjbmyw', 101: 'fhz_wz1_h', 102: 'fhz_wz1_f', 103: 'fhz_wz1_ztyc', 104: 'fhz_wz1', 105: 'fhz_wz2', 106: 'fhz_wz2_h', 107: 'fhz_wz2_f', 108: 'fhz_wz2_ztyc', 109: 'fhz_wz3', 110: 'fhz_wz3_h', 111: 'fhz_wz3_ztyc', 112: 'fhz_wz3_f', 113: 'fhz_qz1', 114: 'fhz_qz1_h', 115: 'fhz_qz2', 116: 'fhz_qz1_f', 117: 'fhz_qz1_ztyc', 118: 'fhz_qz2_h', 119: 'fhz_qz2_f', 120: 'fhz_qz2_ztyc', 121: 'fhz_qz3', 122: 'fhz_qz3_h', 123: 'fhz_qz3_f', 124: 'fhz_qz3_ztyc', 125: 'fhz_zz2_h', 126: 'fhz_zz1', 127: 'fhz_zz2_ztyc', 128: 'fhz_zz2', 129: 'fhz_zz1_h', 130: 'fhz_zz1_f', 131: 'fhz_zz2_f', 132: 'fhz_zz1_ztyc', 133: 'fhz_zz3', 134: 'fhz_zz4', 135: 'fhz_zz3_h', 136: 'fhz_zz5', 137: 'fhz_zz4_h', 138: 'fhz_zz3_f', 139: 'fhz_zz6', 140: 'fhz_zz5_h', 141: 'fhz_zz4_f', 142: 'fhz_zz3_ztyc', 143: 'fhz_zz4_ztyc', 144: 'fhz_zz5_f', 145: 'fhz_zz5_ztyc', 146: 'fhz_zz6_h', 147: 'fhz_zz6_f', 148: 'fhz_zz6_ztyc', 149: 'fhz_xn1', 150: 'fhz_xn1_h', 151: 'fhz_xn1_f', 152: 'fhz_xn1_ztyc', 153: 'fhz_bs1', 154: 'fhz_fh1_h', 155: 'fhz_fh1_f', 156: 'fhz_fh1_ztyc', 157: 'fhz_fh2', 158: 'fhz_fh2_h', 159: 'fhz_fh2_f', 160: 'fhz_fh2_ztyc', 161: 'fhz_fh3', 162: 'fhz_fh3_h', 163: 'fhz_fh3_f', 164: 'fhz_fh3_ztyc', 165: 'fhz_hdzz1', 166: 'fhz_hdzz1_h', 167: 'fhz_hdzz1_f', 168: 'fhz_hdzz1_ztyc', 169: 'fhz_hdzz2', 170: 'fhz_hdzz2_h', 171: 'fhz_hdzz2_f', 172: 'fhz_hdzz2_ztyc', 173: 'fhz_zz7', 174: 'fhz_zz7_h', 175: 'fhz_zz7_f', 176: 'fhz_zz7_ztyc', 177: 'fhz_fh1', 178: 'fhz_bs1_f', 179: 'fhz_bs1_ztyc', 180: 'fhz_bs1_h', 181: 'fhz_xn2', 182: 'fhz_xn2_h', 183: 'fhz_xn2_f', 184: 'fhz_xn2_ztyc', 185: 'fhz_hdzz3', 186: 'fhz_hdzz3_f', 187: 'fhz_hdzz3_h', 188: 'fhz_hdzz3_ztyc', 189: 'fhz_wz4', 190: 'fhz_wz4_h', 191: 'fhz_wz4_f', 192: 'fhz_wz4_ztyc', 193: 'fhz_qz4', 194: 'fhz_qz4_f', 195: 'fhz_qz4_h', 196: 'fhz_qz4_ztyc', 197: 'xdwcr', 198: 'jdyxxsd', 199: 'dzsd_l', 200: 'dzsd_m', 201: 'bjdsyc_cyg_zzywj', 202: 'bjdszc_cyg_zzywj', 203: 'bjdsyc_cyg_chywj', 204: 'bjdszc_cyg_chywj', 205: 'bjdsyc_cyg_gsywj', 206: 'bjdszc_cyg_gsywj', 207: 'bjdsyc_tg_zzywc', 208: 'bjdszc_tg_zzywc', 209: 'ywzt_yfzw', 210: 'bjdsyc_hgq_ywc', 211: 'bjdszc_hgq_ywc', 212: 'bjdsyc_tg_ywc', 213: 'bjdszc_tg_ywc', 214: 'bjdsyc_hgq_ysywc', 215: 'bjdszc_hgq_ysywc', 216: 'bjdsyc_tg_ysywc', 217: 'bjdszc_tg_ysywc', 218: 'bjdsyc_sx', 219: 'bjdszc_sx'}
+rydd_cls_names: &rydd_cls_names {0: 'person', 1: 'bicycle', 2: 'car', 3: 'motorcycle', 4: 'airplane', 5: 'bus', 6: 'train', 7: 'truck', 8: 'boat', 9: 'traffic light', 10: 'fire hydrant', 11: 'stop sign', 12: 'parking meter', 13: 'bench', 14: 'bird', 15: 'cat', 16: 'dog', 17: 'horse', 18: 'sheep', 19: 'cow', 20: 'elephant', 21: 'bear', 22: 'zebra', 23: 'giraffe', 24: 'backpack', 25: 'umbrella', 26: 'handbag', 27: 'tie', 28: 'suitcase', 29: 'frisbee', 30: 'skis', 31: 'snowboard', 32: 'sports ball', 33: 'kite', 34: 'baseball bat', 35: 'baseball glove', 36: 'skateboard', 37: 'surfboard', 38: 'tennis racket', 39: 'bottle', 40: 'wine glass', 41: 'cup', 42: 'fork', 43: 'knife', 44: 'spoon', 45: 'bowl', 46: 'banana', 47: 'apple', 48: 'sandwich', 49: 'orange', 50: 'broccoli', 51: 'carrot', 52: 'hot dog', 53: 'pizza', 54: 'donut', 55: 'cake', 56: 'chair', 57: 'couch', 58: 'potted plant', 59: 'bed', 60: 'dining table', 61: 'toilet', 62: 'tv', 63: 'laptop', 64: 'mouse', 65: 'remote', 66: 'keyboard', 67: 'cell phone', 68: 'microwave', 69: 'oven', 70: 'toaster', 71: 'sink', 72: 'refrigerator', 73: 'book', 74: 'clock', 75: 'vase', 76: 'scissors', 77: 'teddy bear', 78: 'hair drier', 79: 'toothbrush'}
+shudian_cls_names: &shudian_cls_names {0: 'qls', 1: 'jgt_bx', 2: 'yw', 3: 'jyz_wh', 4: 'jyz_xs', 5: 'jyzbl_zb', 6: 'jyz_ps', 7: 'jyz_zs', 8: 'jyz_sqps', 9: 'jyz_lh', 10: 'jyh_yw', 11: 'jyh_tl', 12: 'jyh_sh', 13: 'jyh_zs', 14: 'jyh_fz', 15: 'jyz_bxdj', 16: 'ct_py', 17: 'uxls_sd', 18: 'fzc_hy', 19: 'fzc_tl', 20: 'fzc_px', 21: 'fzc_xs', 22: 'xd_qx', 23: 'xd_azbdw', 24: 'ddx_dg', 25: 'ddx_sg', 26: 'ddx_ss', 27: 'ddx_xs', 28: 'gtjc_zwdj', 29: 'gtjc_lzym', 30: 'gtjc_ps', 31: 'gtjc_cj', 32: 'fnss_sd', 33: 'bzp_twbq', 34: 'bzp_ps', 35: 'td_yh', 36: 'dc_yh', 37: 'wjj_yh', 38: 'ttj_yh', 39: 'qt_yh', 40: 'jdx_wl', 41: 'jdx_dk', 42: 'lm_xs', 43: 'lm_qlm', 44: 'lm_azbgf'}
+pg_cls_names: &pg_cls_names {0: 'dzsd_m',1: 'dzsd_red',2: 'dzsd_green',3: 'dzsd_yellow',4: 'dzsd_white',5: 'dzsd_blue',6: 'dzsd_other',7: 'kgg_ybh',8: 'kgg_ybf',9: 'kgg_wyb',10: 'xzsd_m',11: 'xzsd_red',12: 'xzsd_green',13: 'xzsd_yellow',14: 'xzsd_white',15: 'xzsd_blue',16: 'xzsd_other',17: 'kqkg_up',18: 'kqkg_down'}
+dm_cls_names: &dm_cls_names {0: 'lastA', 1: 'times', 2: 'firstA', 3: 'jcq3_counter',4: 'maxTemp', 5: 'lastTemp', 6: 'envTemp', 7: 'digital_ylb', 8: 'last_V', 9: 'lastV', 10: 'envHum'}
+meter_cls_names: &meter_cls_names {0: 'sf6_singleScale_color',1: 'sf6_doubleScale_noColor',2: 'sf6_doubleScale_color',3: 'xldlb_a',4: 'xldlb_b',5: 'xldlb_c',6: 'xldlb_d',7: 'xldlb_f',8: 'ywb_gourd',9: 'ywb_square',10: 'ywb_round',11: 'ywb_a',12: 'ywb_b',13: 'ywb_c',14: 'tg_ywc_pointer',15: 'pg_dlb_dyb',16: 'yzfj_a'}
+
+##########模型锚点##########
+#屏柜通用
+pg_param: &pg_param E2025070221.E2025070221-007.at-det-pg.m-yolov8det-pg_20260203.16.huawei-300ipro
+
+#屏柜旋钮
+pgxnbs_param: &pgxnbs_param E2025070221.E2025070221-007.at-pose-pgxnbs.m-yolov8pose-pgxnbs_20260128.5.huawei-300ipro
+
+#外观识别
+wgsb_param: &wgsb_param E2025070091.E2025070091-001.at-det-sub-wgsb.m-yolov8det-sub-wgsb_20251205.5 
+
+#地面油污
+dmyw_param: &dmyw_param E2024102101ls.E2024102101ls-001.at-det-dmyw.m-yolov8det-dmyw_20251204.77 
+
+#连续表计
+meter_p1_param: &meter_p1_param E2025070221.E2025070221-007.at-pmcnc-single.m-pmcnc-pose-meter-single_20260123.11.huawei-300ipro
+meter_p2_param: &meter_p2_param E2025070221.E2025070221-007.at-pmcnc-single.m-pmcnc-pose-pointer-single_20260123.14.huawei-300ipro
+meter_p3_param: &meter_p3_param E2025070221.E2025070221-007.at-pmcnc-single.m-pmcnc-pose-marks-single_20260123.15.huawei-300ipro
+
+#离散表计
+ptr_p1_param: &ptr_p1_param E2025070221.E2025070221-007.at-pmdnc-obb.m-pmd-det-meter_20251210.3 
+ptr_p2_param: &ptr_p2_param E2025070221.E2025070221-007.at-pmdnc-obb.m-pmd-pose-pointer_20251210.2 
+ptr_p3_param: &ptr_p3_param E2025070221.E2025070221-007.at-pmdnc-obb.m-pmd-obb-meter_20251210.2 
+ptr_p4_param: &ptr_p4_param E2025070221.E2025070221-007.at-pmdnc-paddleocr.m-pmd-paddleocr-meter_20251210.1 
+
+#液位油位通用
+lrm_param: &lrm_param E2025070221.E2025070221-007.at-lrm.m-lrm-pose-meter_20260128.3.huawei-300ipro
+
+#数显通用
+dm_seg_param: &dm_seg_param E2025070221.E2025070221-007.at-dm-common.m-dm-seg-meter-common_20251210.3 
+dm_ocr_param: &dm_ocr_param E2025070221.E2025070221-007.at-dm-common-paddleocr.m-dm-ocr-meter-common-paddleocr_20251210.2 
+
+#分合储能
+fhz_param: &fhz_param E2025070221.E2025070221-007.at-det-fhzcn.m-yolov8det-fhzcn_20260129.14.huawei-300ipro
+cnz_param: &cnz_param E2025070221.E2025070221-007.at-det-fhzcn.m-yolov8det-fhzcn_20251210.8 
+
+#隔离开关&接地刀闸
+isolator_param: &isolator_param E2025070221.E2025070221-007.at-det-isolator.m-yolov8det-isolator_20260123.3.huawei-300ipro
+jddz_param: &jddz_param E2025070221.E2025070221-007.at-pose-jddz.m-yolov8pose-jddz_20260123.5.huawei-300ipro
+
+#静默配置
+wcgzaqm_param: &wcgzaqm_param E2025070221.E2025070221-007.at-det-wcgzaqm.m-yolov8det-wcgzaqm_20260120.2.huawei-300ipro
+person_param: &person_param E2025060291.E2025060291-004.at-det-person.m-yolov8det-person_20250925.5 
+hzyw_param: &hzyw_param E2025070091.E2025070091-001.at-det-hzyw.m-yolov8det-hzyw_20251201.2 
+wcaqd_param: &wcaqd_param E2025040230.E2025040230-002.at-det-person-wcaqd.at-det-person-wcaqd_20250922.2 
+
+abilities:
+##########设备外观查看##########
+    all_qxsb:
+        desc: 外观识别
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names: *all_qxsb_cls_names
+                param: *wgsb_param
+                conf: 0.95
+                patch: defect
+        select_cls:
+            - bj_bpmh
+            - bj_wkps
+            - hxq_gjbs
+            - hxq_gjtps
+            - ywzt_yfyc
+            - xmbhyc
+            - yw_gkxfw
+            - yw_nc
+            - sly_dmyw
+            - jyz_pl
+            - sly_bjbmyw
+            - hxq_yfps
+            - bj_bpps
+            - bj_bpps_gsywj
+            - bjdsyc_zz
+            - bj_sx_dsyc
+            - gcc_ps
+            - gcc_mh
+            - jsxs_ecjxh
+            - jsxs_jdyxx
+            - jsxs_ddjt
+            - jsxs_ddyx
+            - bmwh
+            - yxdgsg
+            - drqgd
+            - hxq_yfqs
+            - ws_ywyc
+            - yljdq_flow
+            - yljdq_stop
+            - mbhp
+            - xmbhyc_sn
+            - hxq_bjbmyw
+            - jdyxxsd
+            - bjdsyc_cyg_zzywj
+            - bjdsyc_cyg_chywj
+            - bjdsyc_cyg_gsywj
+            - bjdsyc_tg_zzywc
+            - ywzt_yfzw
+            - bjdsyc_hgq_ywc
+            - bjdsyc_tg_ywc
+            - bjdsyc_hgq_ysywc
+            - bjdsyc_tg_ysywc
+        trans_cls:
+            bj_bpmh: 表计表盘模糊
+            bj_bpps: 表计表盘破损
+            bj_bpps_gsywj: 表计表盘破损
+            bj_sx_dsyc: 表计读数异常
+            bj_wkps: 表计外壳破损
+            bjdsyc_cyg_chywj: 表计读数异常
+            bjdsyc_cyg_gsywj: 表计读数异常
+            bjdsyc_cyg_zzywj: 表计读数异常
+            bjdsyc_hgq_ysywc: 表计读数异常
+            bjdsyc_hgq_ywc: 表计读数异常
+            bjdsyc_tg_ysywc: 表计读数异常
+            bjdsyc_tg_ywc: 表计读数异常
+            bjdsyc_tg_zzywc: 表计读数异常
+            bjdsyc_zz: 表计读数异常
+            bmwh: 表面污秽
+            drqgd: 电容器鼓肚
+            gcc_mh: 观察窗模糊
+            gcc_ps: 观察窗破损
+            hxq_bjbmyw: 部件表面油污
+            hxq_gjbs: 呼吸器硅胶变色
+            hxq_gjtps: 呼吸器硅胶桶破损
+            hxq_yfps: 呼吸器油封破损
+            hxq_yfqs: 呼吸器油封缺失
+            jdyxxsd: 接地引下线松动
+            jsxs_ddjt: 导电接头锈蚀
+            jsxs_ddyx: 引线锈蚀
+            jsxs_ecjxh: 二次接线盒锈蚀
+            jsxs_jdyxx: 接地引下线锈蚀
+            jyz_pl: 绝缘子破裂
+            mbhp: 面板花屏
+            sly_bjbmyw: 部件表面油污
+            sly_dmyw: 地面油污
+            ws_ywyc: 瓦斯油位异常
+            xmbhyc: 箱门闭合异常
+            xmbhyc_sn: 箱门闭合异常
+            yljdq_flow: 油流继电器流动
+            yljdq_stop: 油流继电器停止
+            yw_gkxfw: 异物_挂空悬浮物
+            yw_nc: 异物_鸟巢
+            ywzt_yfyc: 油封异常
+            ywzt_yfzw: 呼吸器油封脏污
+            yxdgsg: 引线断股松股
+
+    sly_dmyw:
+        cls_names:
+            0: shadow
+            1: person
+            2: sly_dmyw
+        desc: 地面油污
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names:
+                    0: shadow
+                    1: person
+                    2: sly_dmyw
+                param: *dmyw_param 
+                patch: defect
+                conf: 0.5
+        select_cls:
+            - sly_dmyw
+        trans_cls:
+            sly_dmyw: 地面油污
+
+##########屏柜通用##########
+            
+    light_pgdzsd_mn:
+        desc: mn屏柜大指示灯状态
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names: *pg_cls_names
+                param: *pg_param 
+                patch: light_pgzsd
+        select_cls:
+            - dzsd_m
+            - dzsd_red
+            - dzsd_green
+            - dzsd_yellow
+            - dzsd_white
+            - dzsd_blue
+            - dzsd_other
+        trans_cls:
+            dzsd_blue: 亮蓝灯
+            dzsd_green: 亮绿灯
+            dzsd_m: 指示灯灭
+            dzsd_other: 指示灯亮
+            dzsd_red: 亮红灯
+            dzsd_white: 亮白灯
+            dzsd_yellow: 亮黄灯
+
+    light_pgxzsd_mn:
+        desc: mn屏柜小指示灯状态
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names: *pg_cls_names
+                param: *pg_param 
+                patch: light_pgzsd
+        select_cls:
+            - xzsd_m
+            - xzsd_red
+            - xzsd_green
+            - xzsd_yellow
+            - xzsd_white
+            - xzsd_blue
+            - xzsd_other
+        trans_cls:
+            xzsd_blue: 亮蓝灯
+            xzsd_green: 亮绿灯
+            xzsd_m: 指示灯灭
+            xzsd_other: 指示灯亮
+            xzsd_red: 亮红灯
+            xzsd_white: 亮白灯
+            xzsd_yellow: 亮黄灯
+
+    switch_pgbhyb_mn:
+        desc: mn屏柜保护压板状态
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names: *pg_cls_names
+                param: *pg_param 
+                patch: light_pgzsd
+        select_cls:
+            - kgg_ybh
+            - kgg_ybf
+            - kgg_wyb
+        trans_cls:
+            kgg_ybf: 压板分
+            kgg_ybh: 压板合
+            kgg_wyb: 无压板
+
+    switch_pgkqkg_mn:
+        desc: mn屏柜空开状态
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names: *pg_cls_names
+                param: *pg_param 
+                patch: light_pgzsd
+        select_cls:
+            - kqkg_up
+            - kqkg_down
+            - kqkg_left
+            - kqkg_right
+        trans_cls:
+            kqkg_down: 向下
+            kqkg_left: 向左
+            kqkg_right: 向右
+            kqkg_up: 向上
+
+    switch_pgxnbs_p:
+        desc: 屏柜旋钮把手状态
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names:
+                    0: xn_bs
+                kpt_dims: 2
+                kpt_names:
+                    - tail
+                    - head
+                param: *pgxnbs_param 
+                patch: switch_pgxnbs_p
+                pre_process:
+                    - crop_by_roi
+                select_cls:
+                    - right
+                    - right_up
+                    - up
+                    - left_up
+                    - left
+                    - left_bottom
+                    - bottom
+                    - right_bottom
+                    - xn_bs
+                trans_cls:
+                    bottom: 向下
+                    left: 向左
+                    left_bottom: 左下
+                    left_up: 左上
+                    right: 向右
+                    right_bottom: 右下
+                    right_up: 右上
+                    up: 向上
+                    xn_bs: 旋钮把手
+
+#########表计读数（指针）##########
+
+    meter_blq_xl:
+        desc: 避雷器泄漏电流表读数
+        label:
+            marks:
+                value: float
+        pipeline:
+            1:
+                base: base_yolo
+                patch: meter_p1
+                cls_names: *meter_cls_names
+                kpt_dims: 2
+                kpt_names:
+                    - center_pointer
+                param: *meter_p1_param 
+            2:
+                base: base_yolo
+                patch: meter_p2
+                cls_names:
+                    0: box_pointer_black
+                kpt_dims: 2
+                kpt_names:
+                    - mark_pointer_black
+                param: *meter_p2_param 
+            3:
+                base: base_yolo
+                patch: meter_p3
+                cls_names:
+                    0: box_number
+                kpt_dims: 2
+                kpt_names:
+                    - mark
+                param: *meter_p3_param
+
+    meter_blq_zzjs:
+        desc: 避雷器指针计数器读数
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names:
+                    0: pointer_counter
+                param: *ptr_p1_param 
+                patch: ptr_digit_p1
+                select_cls:
+                    - pointer_counter
+                trans_cls:
+                    pointer_counter: 表盘
+            2:
+                base: base_yolo
+                cls_names:
+                    0: box_pointer_long
+                    1: box_pointer_short
+                param: *ptr_p2_param 
+                kpt_names:
+                    - mark_pointer_center
+                    - mark_pointer_black
+                kpt_dims: 2
+                patch: ptr_digit_p2
+                select_cls:
+                    - box_pointer_long
+                trans_cls:
+                    box_pointer_long: 长指针
+            3:
+                base: base_yolo
+                cls_names:
+                    0: blq_ocr
+                param: *ptr_p3_param 
+                patch: ptr_digit_p3_obb
+                select_cls:
+                    - blq_ocr
+                trans_cls:
+                    blq_ocr: 指针数字
+            4:
+                base: base_ppocr
+                cls_names:
+                    0: blq_ocr
+                param: *ptr_p4_param 
+                patch: ptr_digit_p4
+                ocrdict: {"ocrdict":"-0123456789.abc"}
+                dictionary: algorithm/ptr_digit_p4/cfg_tps_resnet_bilstm_attn.py
+
+    meter_byq_zzyw:
+        desc: 变压器指针油位表读数
+        label:
+            marks:
+                value: float
+        pipeline:
+            1:
+                base: base_yolo
+                patch: meter_p1
+                cls_names: *meter_cls_names
+                kpt_dims: 2
+                kpt_names:
+                    - center_pointer
+                param: *meter_p1_param 
+            2:
+                base: base_yolo
+                patch: meter_p2
+                cls_names:
+                    0: box_pointer_black
+                kpt_dims: 2
+                kpt_names:
+                    - mark_pointer_black
+                param: *meter_p2_param 
+            3:
+                base: base_yolo
+                patch: meter_p3
+                cls_names:
+                    0: box_number
+                kpt_dims: 2
+                kpt_names:
+                    - mark
+                param: *meter_p3_param 
+
+    meter_byq_yw:
+        desc: 变压器油温表读数
+        label:
+            marks:
+                value: float
+        pipeline:
+            1:
+                base: base_yolo
+                patch: meter_p1
+                cls_names: *meter_cls_names
+                kpt_dims: 2
+                kpt_names:
+                    - center_pointer
+                param: *meter_p1_param 
+            2:
+                base: base_yolo
+                patch: meter_p2
+                cls_names:
+                    0: box_pointer_black
+                kpt_dims: 2
+                kpt_names:
+                    - mark_pointer_black
+                param: *meter_p2_param 
+            3:
+                base: base_yolo
+                patch: meter_p3_yw
+                cls_names:
+                    0: box_number
+                kpt_dims: 2
+                kpt_names:
+                    - mark
+                param: *meter_p3_param 
+
+    meter_dldyb:
+        desc: 电流电压表读数
+        label:
+            marks:
+                value: float
+        pipeline:
+            1:
+                base: base_yolo
+                patch: meter_p1
+                cls_names: *meter_cls_names
+                kpt_dims: 2
+                kpt_names:
+                    - center_pointer
+                param: *meter_p1_param 
+            2:
+                base: base_yolo
+                patch: meter_p2
+                cls_names:
+                    0: box_pointer_black
+                kpt_dims: 2
+                kpt_names:
+                    - mark_pointer_black
+                param: *meter_p2_param 
+            3:
+                base: base_yolo
+                patch: meter_p3
+                cls_names:
+                    0: box_number
+                kpt_dims: 2
+                kpt_names:
+                    - mark
+                param: *meter_p3_param 
+
+    meter_sf6_qy:
+        desc: SF6压力表读数识别
+        label:
+            marks:
+                value: float
+        pipeline:
+            1:
+                base: base_yolo
+                patch: meter_p1
+                cls_names: *meter_cls_names
+                kpt_dims: 2
+                kpt_names:
+                    - center_pointer
+                param: *meter_p1_param
+            2:
+                base: base_yolo
+                patch: meter_p2
+                cls_names:
+                    0: box_pointer_black
+                kpt_dims: 2
+                kpt_names:
+                    - mark_pointer_black
+                param: *meter_p2_param 
+            3:
+                base: base_yolo
+                patch: meter_p3
+                cls_names:
+                    0: box_number
+                kpt_dims: 2
+                kpt_names:
+                    - mark
+                param: *meter_p3_param 
+
+    meter_tgywj:
+        desc: 套管指针油位计读数
+        marks:
+          - 0
+          - 1
+        pipeline:
+            1:
+                base: base_yolo
+                patch: meter_p1
+                cls_names: *meter_cls_names
+                kpt_dims: 2
+                kpt_names:
+                    - center_pointer
+                param: *meter_p1_param
+            2:
+                base: base_yolo
+                patch: meter_p2
+                cls_names:
+                    0: box_pointer_black
+                kpt_dims: 2
+                kpt_names:
+                    - mark_pointer_black
+                param: *meter_p2_param
+            3:
+                base: base_yolo
+                patch: meter_p3
+                cls_names:
+                    0: box_number
+                kpt_dims: 2
+                kpt_names:
+                    - mark
+                param: *meter_p3_param
+
+
+    meter_yzty_dw:
+        desc: 有载调压档位表读数
+        scale: 1
+        precision: 1
+        value_floor: 1
+        label:
+            marks:
+                value: float        
+        point_map:
+            8.5: 9a
+            9.0: 9b
+            9.5: 9c
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names: *meter_cls_names
+                kpt_dims: 2
+                patch: meter_p1
+                kpt_names:
+                    - center_pointer
+                param: *meter_p1_param
+            2:
+                base: base_yolo
+                cls_names:
+                    0: box_pointer_black
+                kpt_dims: 2
+                patch: meter_p2
+                kpt_names:
+                    - mark_pointer_black
+                param: *meter_p2_param 
+            3:
+                base: base_yolo
+                cls_names:
+                    0: box_number
+                kpt_dims: 2
+                patch: meter_p3
+                kpt_names:
+                    - mark
+                param: *meter_p3_param 
+
+##########液位/油位表##########
+
+    meter_byq_yzywsc:
+        desc: 变压器油枕油位视窗读数
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names:
+                    0: hgq_ysywc
+                    1: hgq_ywc
+                    2: tg_ywc
+                    3: bj_cyg_chywj
+                kpt_dims: 2
+                kpt_names:
+                    - 1
+                    - 2
+                    - 3
+                    - 4
+                param: *lrm_param 
+                patch: level_p1
+
+    meter_ct_pt:
+        desc: CT_PT油位窗读数
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names:
+                    0: hgq_ysywc
+                    1: hgq_ywc
+                    2: tg_ywc
+                    3: bj_cyg_chywj
+                kpt_dims: 2
+                kpt_names:
+                    - 1
+                    - 2
+                    - 3
+                    - 4
+                param: *lrm_param 
+                patch: level_p1
+
+    meter_gsywj:
+        desc: 变压器管式油位计读数
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names:
+                    0: hgq_ysywc
+                    1: hgq_ywc
+                    2: tg_ywc
+                    3: bj_cyg_chywj
+                kpt_dims: 2
+                kpt_names:
+                    - 1
+                    - 2
+                    - 3
+                    - 4
+                param: *lrm_param 
+                patch: level_p1
+
+    meter_tgywc:
+        desc: 套管油位窗读数
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names:
+                    0: hgq_ysywc
+                    1: hgq_ywc
+                    2: tg_ywc
+                    3: bj_cyg_chywj
+                kpt_dims: 2
+                kpt_names:
+                    - 1
+                    - 2
+                    - 3
+                    - 4
+                param: *lrm_param 
+                patch: level_p1
+
+##########表计读数（数显）##########
+
+    meter_digital_blqgl:
+        desc: 避雷器滚轮计数器读数
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names: *dm_cls_names
+                param: *dm_seg_param
+                patch: meter_digit_p1
+                pre_process:
+                    - crop_by_roi
+                select_cls:
+                    - jcq3_counter
+            2:
+                base: base_ppocr
+                param: *dm_ocr_param 
+                patch: meter_digit_p2
+                ocrdict: {"ocrdict":"-0123456789.abc"}
+                dictionary: algorithm/ptr_digit_p4/cfg_tps_resnet_bilstm_attn.py
+
+
+    meter_digital_dlb:
+        desc: 数显电流表
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names: *dm_cls_names
+                param: *dm_seg_param 
+                patch: meter_digit_p1
+                pre_process:
+                    - crop_by_roi
+                select_cls:
+                    - lastA
+            2:
+                base: base_ppocr
+                param: *dm_ocr_param 
+                patch: meter_digit_p2
+                ocrdict: {"ocrdict":"-0123456789.abc"}
+                dictionary: algorithm/ptr_digit_p4/cfg_tps_resnet_bilstm_attn.py
+
+    meter_digital_dyb:
+        desc: 数显电压表
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names: *dm_cls_names
+                param: *dm_seg_param 
+                patch: meter_digit_p1
+                pre_process:
+                    - crop_by_roi
+                select_cls:
+                    - lastV
+            2:
+                base: base_ppocr
+                param: *dm_ocr_param 
+                patch: meter_digit_p2
+                ocrdict: {"ocrdict":"-0123456789.abc"}
+                dictionary: algorithm/ptr_digit_p4/cfg_tps_resnet_bilstm_attn.py
+
+    meter_digital_ylb:
+        desc: 数显压力表
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names: *dm_cls_names
+                param: *dm_seg_param 
+                patch: meter_digit_p1
+                pre_process:
+                    - crop_by_roi
+                select_cls:
+                    - digital_ylb
+            2:
+                base: base_ppocr
+                param: *dm_ocr_param 
+                patch: meter_digit_p2
+                ocrdict: {"ocrdict":"-0123456789.abc"}
+                dictionary: algorithm/ptr_digit_p4/cfg_tps_resnet_bilstm_attn.py
+
+    meter_kgg_envTemp:
+        desc: 数显温度读数
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names: *dm_cls_names
+                param: *dm_seg_param
+                patch: meter_digit_p1
+                pre_process:
+                    - crop_by_roi
+                select_cls:
+                    - envTemp
+            2:
+                base: base_ppocr
+                param: *dm_ocr_param
+                patch: meter_digit_p2
+                ocrdict: {"ocrdict":"-0123456789.abc"}
+                dictionary: algorithm/ptr_digit_p4/cfg_tps_resnet_bilstm_attn.py
+
+    meter_kgg_envHum:
+        desc: 数显湿度读数
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names: *dm_cls_names
+                param: *dm_seg_param
+                patch: meter_digit_p1
+                pre_process:
+                    - crop_by_roi
+                select_cls:
+                    - envHum
+            2:
+                base: base_ppocr
+                param: *dm_ocr_param
+                patch: meter_digit_p2
+                ocrdict: {"ocrdict":"-0123456789.abc"}
+                dictionary: algorithm/ptr_digit_p4/cfg_tps_resnet_bilstm_attn.py
+
+    meter_digital_xl_lastA:
+        desc: 数显避雷器泄漏电流实时值
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names: *dm_cls_names
+                param: *dm_seg_param
+                patch: meter_digit_p1
+                pre_process:
+                    - crop_by_roi
+                select_cls:
+                    - lastA
+            2:
+                base: base_ppocr
+                param: *dm_ocr_param
+                patch: meter_digit_p2
+                ocrdict: {"ocrdict":"-0123456789.abc"}
+                dictionary: algorithm/ptr_digit_p4/cfg_tps_resnet_bilstm_attn.py
+
+    meter_digital_xl_times:
+        desc: 数显避雷器动作次数
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names: *dm_cls_names
+                param: *dm_seg_param
+                patch: meter_digit_p1
+                pre_process:
+                    - crop_by_roi
+                select_cls:
+                    - times
+            2:
+                base: base_ppocr
+                param: *dm_ocr_param
+                patch: meter_digit_p2
+                ocrdict: {"ocrdict":"-0123456789.abc"}
+                dictionary: algorithm/ptr_digit_p4/cfg_tps_resnet_bilstm_attn.py
+
+    meter_digital_yztygl:
+        desc: 有载调压表调节次数表
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names: *dm_cls_names
+                param: *dm_seg_param
+                patch: meter_digit_p1
+                pre_process:
+                    - crop_by_roi
+                select_cls:
+                    - jcq3_counter
+            2:
+                base: base_ppocr
+                param: *dm_ocr_param
+                patch: meter_digit_p2
+                ocrdict: {"ocrdict":"-0123456789.abc"}
+                dictionary: algorithm/ptr_digit_p4/cfg_tps_resnet_bilstm_attn.py
+
+    meter_digital_led:
+        desc: LED数值显示器读数
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names: *dm_cls_names
+                param: *dm_seg_param
+                patch: meter_digit_p1
+                pre_process:
+                    - crop_by_roi
+            2:
+                base: base_ppocr
+                param: *dm_ocr_param
+                patch: meter_digit_p2
+                ocrdict: {"ocrdict":"-0123456789.abc"}
+                dictionary: algorithm/ptr_digit_p4/cfg_tps_resnet_bilstm_attn.py
+
+
+#########位置状态识别##########
+
+    switch_cn_other:
+        desc: 其他型储能指示
+        label:
+            roi:
+                x1: int
+                x2: int
+                y1: int
+                y2: int
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names:
+                    0: cnkg_ycn
+                    1: cnkg_wcn
+                param: *cnz_param 
+                patch: defect
+        select_cls:
+            - cnkg_ycn
+            - cnkg_wcn
+        trans_cls:
+            cnkg_wcn: 未储能
+            cnkg_ycn: 已储能
+
+    switch_fh_other:
+        desc: 其他型分合指示
+        label:
+            roi:
+                x1: int
+                x2: int
+                y1: int
+                y2: int
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names:
+                    0: fhz_h
+                    1: fhz_f
+                param: *fhz_param 
+                patch: defect
+        select_cls:
+            - fhz_f
+            - fhz_h
+        trans_cls:
+            fhz_f: 分
+            fhz_h: 合
+
+    isolator_glkg:
+        desc: 隔离开关状态识别
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names:
+                    0: czdbss_f
+                    1: czdbss_h
+                    2: czdbss_yc
+                    3: vxsbkh_f
+                    4: vxsbkh_h
+                    5: vxsbkh_yc
+                    6: spsbkh_f
+                    7: spsbkh_h
+                    8: spsbkh_yc
+                    9: spdbxz_f
+                    10: spdbxz_h
+                    11: spdbxz_yc
+                    12: spdbss_f
+                    13: spdbss_h
+                    14: spdbss_yc
+                param: *isolator_param 
+                patch: defect
+        select_cls:
+            - czdbss_f
+            - czdbss_h
+            - czdbss_yc
+            - vxsbkh_f
+            - vxsbkh_h
+            - vxsbkh_yc
+            - spsbkh_f
+            - spsbkh_h
+            - spsbkh_yc
+            - spdbxz_f
+            - spdbxz_h
+            - spdbxz_yc
+            - spdbss_f
+            - spdbss_h
+            - spdbss_yc
+        trans_cls:
+            czdbss_f: 分
+            czdbss_h: 合
+            czdbss_yc: 不到位
+            spdbss_f: 分
+            spdbss_h: 合
+            spdbss_yc: 不到位
+            spdbxz_f: 分
+            spdbxz_h: 合
+            spdbxz_yc: 不到位
+            spsbkh_f: 分
+            spsbkh_h: 合
+            spsbkh_yc: 不到位
+            vxsbkh_f: 分
+            vxsbkh_h: 合
+            vxsbkh_yc: 不到位
+
+    isolator_jddz_p:
+        desc: 接地刀闸状态
+        pipeline:
+            1:
+                base: base_yolo
+                patch: isolator_jddz_p
+                cls_names:
+                    0: jddz
+                kpt_dims: 2
+                kpt_names:
+                    - tail
+                    - head
+                param: *jddz_param
+        select_cls:
+            - jddz_f
+            - jddz_h
+            - jddz_yc
+            - jddz
+        trans_cls:
+            jddz: 接地刀闸
+            jddz_f: 分
+            jddz_h: 合
+            jddz_yc: 不到位
+
+##########静默算法##########
+
+    wcaqm:
+        desc: 未穿安全帽
+        pipeline:
+            1:
+                base: base_yolo
+                patch: defect
+                cls_names:
+                    0: person
+                    1: wcgz
+                    2: wcaqm
+                    3: gzzc
+                    4: aqmzc
+                param: *person_param
+                conf: 0.5
+                select_cls:
+                    - person
+                trans_cls:
+                    person: 人
+            2:
+                base: base_yolo
+                patch: defect
+                cls_names:
+                    0: person
+                    1: wcgz
+                    2: wcaqm
+                    3: gzzc
+                    4: aqmzc
+                param: *wcgzaqm_param
+                conf: 0.5
+                select_cls:
+                    - wcaqm
+                trans_cls:
+                    wcaqm: 未穿安全帽
+
+    wcgz:
+        desc: 未穿工装
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names:
+                    0: person
+                    1: wcgz
+                    2: wcaqm
+                    3: gzzc
+                    4: aqmzc 
+                param: *wcgzaqm_param 
+                conf: 0.5
+                patch: defect
+        select_cls:
+            - wcgz
+        trans_cls: 
+            wcgz: 未穿工装
+
+    person:
+        desc: 人员闯入
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names:
+                    0: person
+                    1: wcgz
+                    2: wcaqm
+                    3: gzzc
+                    4: aqmzc
+                conf: 0.5
+                param: *person_param 
+                patch: defect
+        select_cls:
+            - person
+        trans_cls:
+            person: 人员闯入
+
+    yxcr:
+        desc: 越线闯入
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names:
+                    0: person
+                    1: wcgz
+                    2: wcaqm
+                    3: gzzc
+                    4: aqmzc
+                conf: 0.5
+                param: *person_param 
+                patch: defect
+        select_cls:
+            - person
+        trans_cls:
+            person: 人员闯入
+
+    fire:
+        desc: 明火
+        pipeline:
+            1:
+                base: base_yolo
+                param: *hzyw_param
+                conf: 0.5 
+                cls_names:
+                    0: smoke
+                    1: fire
+                patch: defect
+        select_cls:
+            - fire
+        trans_cls:
+            fire: 明火
+
+    smoke:
+        desc: 烟雾
+        pipeline:
+            1:
+                base: base_yolo
+                param: *hzyw_param 
+                conf: 0.5
+                cls_names:
+                    0: smoke
+                    1: fire
+                patch: defect
+        select_cls:
+            - smoke
+        trans_cls:
+            smoke: 烟雾
+
+    hzyw:
+        desc: 火灾烟雾
+        pipeline:
+            1:
+                base: base_yolo
+                param: *hzyw_param
+                conf: 0.5
+                cls_names:
+                    0: smoke
+                    1: fire
+                patch: defect
+        select_cls:
+            - smoke
+            - fire
+        trans_cls:
+            fire: 明火
+            smoke: 烟雾
+
+    wcaqd:
+        desc: 未穿安全带
+        pipeline:
+            1:
+                base: base_yolo
+                cls_names: 
+                    0: person
+                    1: aqd_front
+                    2: aqd_back
+                    3: aqd_side
+                    4: aqd_top
+                param: *wcaqd_param 
+                conf: 0.5
+                patch: defect
+        select_cls:
+            - person
+            - aqd_front
+            - aqd_back
+            - aqd_side
+            - aqd_top
+

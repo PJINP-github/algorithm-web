@@ -1,0 +1,236 @@
+# ============================================
+# 周报生成配置
+# 通过修改此文件灵活控制周报的展示内容
+# ============================================
+
+# ---------- 数据源 ----------
+data_source:
+  directory: 'date_review/0Work'  # table 所在文件夹，相对于本配置文件
+  old_file: old.xlsx                         # 老数据文件名或路径
+  new_file: result-2.xlsx                    # 新数据文件名或路径
+
+# ---------- date_review 排序补充 ----------
+date_review:
+  accuracy_json:
+    enabled: true
+    path: 'date_review\0Work\accuracy.json'
+    recognition_field: recognition
+    empty_recognition_sort_last: true  # recognition 为空时，该条任务日期按无效数据排到最后
+
+# ---------- 阈值配置 ----------
+thresholds:
+  accuracy: 95          # 准确率达标阈值(%)
+  false_positive: 5     # 误报率阈值(%)
+  stale_days: 15        # 更新日期久远阈值(天)
+
+# ---------- 准确率统计 ----------
+# 1=使用“准确数量”，2=使用“审核后准确数量”
+AlgorithmPositionAccuracySelection: 1
+# 算法小类名称包含任一子字符串时归入静默任务
+Specify_silent_mode_group:
+  - substring: 静默
+  - substring: 吸烟
+  - substring: 人员闯入
+
+  - substring: 越线闯入
+  - substring: 未穿安全帽
+  - substring: 火灾烟雾
+
+  - substring: 未穿工装
+  - substring: 明火
+  - substring: 烟雾
+
+  - substring: 未穿安全带
+  - substring: 物品遗漏
+  - substring: 渗漏油地面油污
+
+  - substring: 人员聚集
+  - substring: 地面油污
+  - substring: 玩手机
+
+  - substring: 火焰
+  - substring: 小动物闯入
+  - substring: 异物_
+# ---------- 章节开关 ----------
+sections:
+  site: true            # 一、站点
+  overview: true        # 二、算法运行实况
+  changes: true         # 三、本周变化
+  handled: false        # 四、已处理（对比上周已解决的事项，默认关闭）
+  risks: true           # 问题及风险（先输出）
+  next_steps: true      # 下一步计划（后输出）
+
+# ---------- 算法小类控制 ----------
+# display=false 时，列表中的算法小类不显示；
+# include_in_calculation=false 时，列表中的算法小类不参与统计和新旧对比。
+algorithm_control:
+  enabled: true
+  display: true
+  include_in_calculation: true
+  algorithm_classes:
+    - 数显油温表最高温度
+    - 烟雾
+  # true=该表应用上面的显示控制，false=该表仍显示列表中的算法小类
+  tables:
+    accuracy_detail: true
+    low_accuracy: true
+    high_false_positive: true
+    blur: true
+    changes: true
+    handled: true
+    risks: true
+
+# ---------- 二、算法运行实况 ----------
+overview:
+  show_total_points: true        # 1、巡视点位
+  show_avg_accuracy: true        # 2、平均准确率
+  show_site_attainment: no        # 是否显示“本站点 达标率为 xxx”
+  show_accuracy_details: true    # 2、列出各算法小类准确率明细
+  # 算法明细准确率显示方式：raw=准确率，audited=审核后，both=两者
+  accuracy_detail_display: raw
+  # 准确率明细排序：desc=高到低，asc=低到高，none=保持原始顺序
+  accuracy_detail_sort: desc
+  # 准确率明细列显示开关
+  accuracy_detail_columns:
+    show_points: true
+    show_correct: true
+    show_errors: true
+    show_accuracy: true
+  # 准确率明细颜色阈值和字体色
+  accuracy_detail_colors:
+    warning_threshold: 95
+    warning_text: C88700
+    danger_threshold: 50
+    danger_text: E57373
+  show_low_accuracy: true        # 3、准确率低于阈值
+  show_high_false_positive: false # 4、误报率高于阈值
+  show_blur: false                # 5、拍照模糊
+  show_idle: false                # 6、无触发/长期挂起
+  # 无数据时是否输出"无"占位行
+  # true=输出"xxx：无"，false=无数据时不输出该行
+  show_empty_placeholder: false
+
+# ---------- 子列表表格图片 ----------
+# 所有原本以 "-" 展示的嵌套明细，默认改为 PNG 表格。
+table_layout:
+  enabled: true                  # 是否将 "-" 子列表渲染为表格 PNG
+  split_long_tables: true        # 长表按行拆成左右两块
+  split_ratio: 0.5               # 表格高度超过宽度的该比例时自动拆分
+  column_gap: 0                  # 左右两块之间的像素间距，0 表示紧贴
+
+# ---------- 剪贴板输出 ----------
+clipboard:
+  pure_image: false             # 是否将整份周报作为一张纯图片粘贴，false默认关闭
+  lan_share: true               # 是否生成并开放局域网复制页
+  lan_host: 0.0.0.0             # 监听全部网卡，便于同局域网访问
+  lan_port: 8765                # 局域网复制页端口
+
+# ---------- 三、本周变化 ----------
+changes:
+  show_added: true           # 1、新增算法
+  show_removed: true         # 2、移除算法
+  show_metric_changes: true  # 3、指标变化
+  # metric_mode=accuracy_trend 时展示“算法准确率变化”表；generic 时沿用老的字段对比表
+  metric_mode: accuracy_trend
+  # 准确率趋势表是否显示点位数量相关列
+  show_point_change: false
+  # 趋势表排序：desc=当前准确率高到低，asc=低到高，none=保持输入顺序
+  metric_sort: desc
+  # 准确率变化颜色
+  accuracy_trend_colors:
+    positive_text: 2E7D32
+    negative_text: C62828
+    neutral_text: 666666
+  show_dash_for_unchanged: false  # 指标变化中未变化字段是否显示 "-"
+  # 指标变化对比的字段列表（对应 table 表头）
+  # 百分比字段会自动统一为百分比格式（如 0.86 → 86%）
+  compare_fields:
+    - 点位数量
+    - 审核后准确率
+
+# ---------- 四、已处理（对比上周已解决的事项） ----------
+handled:
+  show_accuracy_improved: true   # 准确率已达标（上周<95%，本周>=95%）
+  show_fp_reduced: true          # 误报率已降低（上周>5%，本周<=5%）
+  show_leak_reduced: true        # 漏报率已降低（上周>5%，本周<=5%）
+  show_problem_log_done: true    # 问题日志已填写（上周未完成，本周已完成）
+  show_upload_done: true         # 准确率已上传（上周未完成，本周已完成）
+  show_date_updated: true        # 任务日期已更新（上周久远，本周已更新）
+  # 无数据时是否输出"无"占位行
+  show_empty_placeholder: false
+
+# ---------- 六、下一步计划 ----------
+next_steps:
+  show_fp_optimization: true         # 误报算法负样本采集
+  show_problem_log_deadline: false   # 推动问题日志填写
+  show_idle_evaluation: true         # 0准确率算法评估
+  templates:
+    fp_optimization: "针对误报率较高的算法（{high_fp_names}）继续负样本采集与模型优化。"
+    problem_log_deadline: "推动工程组在 {deadline} 前完成问题日志填写。"
+    idle_evaluation: "对正在使用但目前准确率为0%的算法（{idle_names}）评估继续投入或替换模型。"
+
+# ---------- 五、问题及风险 ----------
+risks:
+  show_blur_risk: true    # 拍照模糊风险
+  show_stale_risk: true   # 数据失效风险
+  show_idle_risk: false    # 数据质量风险
+  show_point_empty_risk: true  # 点位数量为空或 "-" 风险
+  show_no_data_risk: true      # 点位数量为 0 的算法无数据风险
+  # 详细化: true=列出具体算法+点位数量+日期, false=仅概述
+  detailed: true
+  templates:
+    blur:
+      detailed: "图片异常风险：存在不满足算法要求的点位图片(模糊、黑白、遮掩等)，进而影响识别准确率："
+      summary: "部分算法存在拍照模糊、黑白等异常图片点位，可能影响识别准确率，需检查拍摄环境及设备状态。"
+    stale:
+      detailed: "数据失效风险：以下算法任务日期久远（超过 {stale_days} 天），存在数据失效风险："
+      summary: "部分算法任务日期久远，存在数据失效风险，需确认是否继续运行。"
+    idle:
+      detailed: "数据质量风险：以下算法长期无有效准确率数据，需关注数据质量与算法运行情况："
+      summary: "部分算法长期无有效准确率数据，需关注数据质量与算法运行情况。"
+    point_empty:
+      detailed: "点位数据风险：以下算法点位数量为空，暂无法纳入准确率统计："
+      summary: "部分算法点位数量为空或为“-”，暂无法纳入准确率统计，需补充点位数据。"
+    no_data:
+      detailed: "算法无数据风险：以下算法点位数量为 0，暂不纳入本周统计："
+      summary: "部分算法点位数量为 0，暂不纳入本周统计，需确认是否已配置有效点位。"
+
+# ---------- 字段级配置（对应 table 表头） ----------
+# display: raw=原始值, audited=审核后值, both=都显示, none=不显示
+# priority: 优先展示哪个值 (raw/audited)
+fields:
+  准确率:
+    display: raw          # 只展示原始准确率
+    priority: raw         # 优先原始准确率
+    threshold: 95         # 低于此值列入"准确率不达标"
+  审核后准确率:
+    display: audited
+    priority: audited
+    threshold: 95
+  误报率:
+    display: audited      # 只展示审核后误报率
+    priority: audited
+    threshold: 5          # 高于此值列入"误报率偏高"
+  审核后误报率:
+    display: audited
+    priority: audited
+    threshold: 5
+  漏报率:
+    display: audited
+    priority: audited
+    threshold: 5          # 高于此值列入"漏报率较高"
+  审核后漏报率:
+    display: audited
+    priority: audited
+    threshold: 5
+  拍照模糊数量:
+    display: both         # 原始+审核后都展示
+  审核后拍照模糊数量:
+    display: both
+  任务日期:
+    stale_days: 15        # 超过此天数视为久远
+  下一版本当前阶段:
+    # 关键字匹配 → 待办类型
+    keywords:
+      填写问题日志: problem_log
+      准确率上传: upload_pending

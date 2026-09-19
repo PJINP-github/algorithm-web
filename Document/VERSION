@@ -1,1 +1,1 @@
-0.0.24 图片动作卡片高度优化：通用图片动作区统一提升最小高度，避免动态等分后卡片显示过矮
+0.0.25 Linux 适配与 .gitignore 重写：入口依赖装入共享 venv_linux（python 3.13.5，含 torch/ultralytics/opencv 等），浏览器与解释器按平台选择（Linux 用系统 Chromium、跳过无执行权限的 venv），修复 Trueno 本地推理 cv2 缺失；.gitignore 改为默认跟踪代码配置、忽略临时/产出/虚拟环境/浏览器目录，并删除各模型内的嵌套 .gitignore

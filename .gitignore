@@ -1,97 +1,103 @@
-# ========== 根目录 ==========
-/*
-!/.gitignore
-!/package.json
-!/README.md
-!/todo.db
-!/src/
-!/Document/
-!/model/
-!/run.bat
-!/tools/
+# ============================================================================
+# algorithm-web / .gitignore
+# 规则：默认跟踪；只忽略临时目录、运行产出、缓存、虚拟环境、浏览器目录、
+#       大体积第三方源码与压缩包。代码/配置/脚本/文档无需在本文件逐条登记。
+# 语法：不含 / 的名字匹配任意层级；以 / 开头只匹配仓库根；! 表示重新录入。
+# ============================================================================
 
-# ========== model 层：先忽略 model 下所有，再放行想要的 ==========
-/model/*
-!/model/authority.yaml
-!/model/Log_Review-tag-0.0.1+python/
-!/model/Model-Annotation-tag-0.1.1+python/
-!/model/Offline_Package_Organization-tag-0.0.12+python/
-!/model/trueno3_src-master-0.0.10/
-!/model/Weekly-Report-Print-tag-0.0.8+python/
-!/model/Project_Closing_PPT-tag0.0.1+python/
+# ── 1. 编译产物与 Rust 缓存 ────────────────────────────────────────────────
+/target/
+.tmp_cargo_home/
+.runtime-cache/
 
-# ========== Log_Review 层 ==========
-/model/Log_Review-tag-0.0.1+python/*
-!/model/Log_Review-tag-0.0.1+python/txt_log_to_xlsx.py
-!/model/Log_Review-tag-0.0.1+python/identification/
+# ── 2. 编辑器 / Agent / 系统元数据 ────────────────────────────────────────
+.vscode/
+.idea/
+.agents/
+.codex/
+.DS_Store
+Thumbs.db
+desktop.ini
+*~
+*.swp
+*.bak
 
-# identification 层
-/model/Log_Review-tag-0.0.1+python/identification/*
-!/model/Log_Review-tag-0.0.1+python/identification/plot_meter_image.py
+# ── 3. 运行临时目录（点前缀） ──────────────────────────────────────────────
+.cache/
+.paddlex/
+.portal_tmp/
+.portal_recycle/
 
-# ========== Model-Annotation 层 ==========
-/model/Model-Annotation-tag-0.1.1+python/*
-!/model/Model-Annotation-tag-0.1.1+python/src/
-
-# src 层：只保留直接子级的 .py
-/model/Model-Annotation-tag-0.1.1+python/src/*
-!/model/Model-Annotation-tag-0.1.1+python/src/*.py
-
-# ========== Offline_Package_Organization 层 ==========
-/model/Offline_Package_Organization-tag-0.0.12+python/*
-!/model/Offline_Package_Organization-tag-0.0.12+python/*.py
-
-# ========== trueno3 层 ==========
-/model/trueno3_src-master-0.0.10/*
-!/model/trueno3_src-master-0.0.10/local_inference/
-
-# local_inference 层：只保留直接子级的 .py
-/model/trueno3_src-master-0.0.10/local_inference/*
-!/model/trueno3_src-master-0.0.10/local_inference/*.py
-
-# ========== Weekly-Report 层 ==========
-/model/Weekly-Report-Print-tag-0.0.8+python/*
-!/model/Weekly-Report-Print-tag-0.0.8+python/*.py
-
-# ========== Project_Closing_PPT 层 ==========
-# 先忽略整个模型目录
-/model/Project_Closing_PPT-tag0.0.1+python/*
-# 代码入口与运行脚本
-!/model/Project_Closing_PPT-tag0.0.1+python/portal_entry.py
-!/model/Project_Closing_PPT-tag0.0.1+python/gen_ppt.bat
-# 配置、依赖说明、README
-!/model/Project_Closing_PPT-tag0.0.1+python/config.yaml
-!/model/Project_Closing_PPT-tag0.0.1+python/requirements.txt
-!/model/Project_Closing_PPT-tag0.0.1+python/README.md
-# PPT 模板（运行时必需）
-!/model/Project_Closing_PPT-tag0.0.1+python/model-aiglrithm.pptx
-# 源码目录
-!/model/Project_Closing_PPT-tag0.0.1+python/src/
-
-# src 层：只保留直接子级的 .py
-/model/Project_Closing_PPT-tag0.0.1+python/src/*
-!/model/Project_Closing_PPT-tag0.0.1+python/src/*.py
-
-# 运行时产出与临时文件（显式再排除一次，防止被上面的放行规则带回）
-/model/Project_Closing_PPT-tag0.0.1+python/portal_inputs/
-/model/Project_Closing_PPT-tag0.0.1+python/portal_outputs/
-/model/Project_Closing_PPT-tag0.0.1+python/.portal_tmp/
-/model/Project_Closing_PPT-tag0.0.1+python/images/
-/model/Project_Closing_PPT-tag0.0.1+python/*_算法结项_*.pptx
-
-# ========== 通用忽略：缓存与虚拟环境 ==========
+# ── 4. Python 缓存与虚拟环境 ──────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
-.Python
-build/
-dist/
-*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .venv/
 venv/
-env/
-ENV/
-.runtime-cache/
-.portal_tmp/
-.portal_recycle/
+venv_linux/
+venv_win/
+
+# ── 5. 业务运行数据与产出目录 ─────────────────────────────────────────────
+portal_inputs/
+portal_outputs/
+portal_work/
+portal_data/
+images/
+output/
+newwrap/
+Work-txt/
+0Work/
+meter_output_*/
+
+# ── 6. 浏览器、分发产物与日志 ─────────────────────────────────────────────
+chrome/
+chromium_user_data/
+.chromium_profile_linux/
+dist/
+build/
+python3.14_install/
+*.log
+
+# ── 7. 运行与开发残留文件 ─────────────────────────────────────────────────
+_tmp_dump*.txt
+tttt.jpg
+verify_point*_ret_img.jpg
+outFile.txt
+log.txt
+Ultralytics/
+*.sqlite3
+*.db-journal
+# 周报抓取留下的页面快照与树形结果（单文件 8.2M / 3.2M）
+/model/Weekly-Report-Print-tag-0.0.8+python/date_review/src/page.html
+/model/Weekly-Report-Print-tag-0.0.8+python/date_review/src/Tree.txt
+
+# ── 8. Trueno 原始源码与权重（按你的要求整体不录入） ──────────────────────
+/model/trueno3_src-master-0.0.10/src/
+/model/trueno3_src-master-0.0.10/model/
+
+# ── 9. 第三方目录、二进制与压缩包 ─────────────────────────────────────────
+docker/
+tests/
+node_modules/
+*.zip
+*.tar
+*.tar.gz
+*.7z
+*.rar
+*.so
+*.dll
+
+# ── 10. sources：忽略下载内容，只保留编译期图标 ───────────────────────────
+# src/routes.rs 用 include_str!("../sources/icons/users/*.svg")，缺失会导致编译失败。
+/sources/*
+!/sources/icons/
+# 各业务模型目录内的 sources（离线包导入/整理产物）同样不录入。
+/model/**/sources/
+
+# ── 11. identification：忽略运行产物，只保留表计调试入口 ──────────────────
+# Rust 会调用 identification/plot_meter_image.py（表计调试）。
+/model/Log_Review-tag-0.0.1+python/identification/*
+!/model/Log_Review-tag-0.0.1+python/identification/plot_meter_image.py
