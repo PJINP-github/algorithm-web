@@ -1,7 +1,8 @@
-"""通用工具：配置、路径、文件分类、后缀处理。"""
+"""通用工具：配置、路径、文件分类、锚点扫描。"""
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -10,9 +11,15 @@ import yaml
 _MODEL_ROOT = Path(__file__).resolve().parent.parent
 _CONFIG_PATH = _MODEL_ROOT / "config.yaml"
 
+ANCHOR_DEF_RE = re.compile(
+    r"^(?P<indent>\s*)(?P<key>[\w\-.]+)\s*:\s*&(?P<anchor>\w+)\s+(?P<value>\S.*?)\s*$",
+    re.MULTILINE,
+)
+
 _DEFAULT_CONFIG: dict[str, Any] = {
     "model_file_suffixes": [".pt", ".om"],
     "model_descriptor_name": "model_descriptor.yaml",
+    "output_yaml_name": "model_descriptor_updated.yaml",
     "output_folder_prefix": "model_descriptor_pack",
     "Algorithm_Order": [],
 }
@@ -53,7 +60,6 @@ def normalize_path(raw: Any) -> Path | None:
 
 
 def strip_model_suffix(name: str, suffixes: list[str]) -> str:
-    """去掉白名单后缀（不区分大小写），只去掉一个后缀。"""
     lower = name.lower()
     for suf in suffixes:
         s = str(suf).lower()
@@ -76,12 +82,10 @@ def safe_filename(name: str) -> str:
 
 
 def detect_has_anchors(yaml_text: str) -> bool:
-    """检测文本中是否存在锚点定义（&name）。不把引用 *name 算作锚点。"""
     return "&" in yaml_text
 
 
 def pick_latest_model(models: list[Path], substring: str) -> Path | None:
-    """从 models 中筛选文件名包含 substring 的，取修改时间最新的那个。"""
     if not substring:
         return None
     matched: list[tuple[float, Path]] = []
@@ -95,3 +99,70 @@ def pick_latest_model(models: list[Path], substring: str) -> Path | None:
         return None
     matched.sort(key=lambda item: item[0], reverse=True)
     return matched[0][1]
+
+
+def scan_anchor_definitions(yaml_text: str) -> list[tuple[str, str]]:
+    return [
+        (m.group("anchor"), m.group("value").strip())
+        for m in ANCHOR_DEF_RE.finditer(yaml_text)
+    ]
+
+
+def detect_ambiguous_substrings(
+    yaml_text: str, algorithm_order: list[dict[str, Any]]
+) -> list[tuple[str, list[str]]]:
+    anchor_defs = scan_anchor_definitions(yaml_text)
+    if not anchor_defs:
+        return []
+
+    result: list[tuple[str, list[str]]] = []
+    for entry in algorithm_order or []:
+        sub = str(entry.get("substring") or "")
+        if not sub:
+            continue
+        matched = [name for name, value in anchor_defs if sub in value]
+        if len(matched) > 1:
+            result.append((sub, matched))
+    return result
+
+
+def scan_inputs(
+    folder: Path, config: dict[str, Any]
+) -> tuple[Path | None, list[Path]]:
+    suffixes = list(config.get("model_file_suffixes") or [])
+    target_name = str(
+        config.get("model_descriptor_name") or "model_descriptor.yaml"
+    ).lower()
+
+    yaml_path: Path | None = None
+    models: list[Path] = []
+
+    try:
+        candidates = sorted(folder.rglob("*"))
+    except OSError:
+        candidates = []
+
+    for item in candidates:
+        if not item.is_file():
+            continue
+        name_lower = item.name.lower()
+        if name_lower == target_name and yaml_path is None:
+            yaml_path = item
+        elif is_model_file(item.name, suffixes):
+            models.append(item)
+
+    return yaml_path, models
+
+
+def list_folder_contents(folder: Path, limit: int = 60) -> list[str]:
+    try:
+        items = sorted(folder.rglob("*"))
+    except OSError:
+        return []
+    out: list[str] = []
+    for p in items[:limit]:
+        try:
+            out.append(str(p.relative_to(folder)))
+        except ValueError:
+            out.append(str(p))
+    return out

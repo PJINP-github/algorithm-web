@@ -8,6 +8,9 @@ model_file_suffixes:
 # 导入文件夹中目标 yaml 的文件名
 model_descriptor_name: model_descriptor.yaml
 
+# 替换后的新文件名称；原文件仍以 model_descriptor_name 命名保留在输出文件夹中
+output_yaml_name: model_descriptor_updated.yaml
+
 # 输出打包文件夹前缀；实际名称为 <prefix>_<YYYYMMDD_HHMM>
 output_folder_prefix: model_descriptor_pack
 

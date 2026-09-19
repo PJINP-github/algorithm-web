@@ -3979,11 +3979,27 @@ fn visible_in_file_list(
     model: &str,
     path: &str,
 ) -> bool {
-    if authority.generic_tab(model).is_some()
-        && Path::new(path).file_name().and_then(|value| value.to_str())
-            == Some("portal_result.json")
-    {
-        return false;
+    if authority.generic_tab(model).is_some() {
+        let filename = Path::new(path)
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default();
+        if filename == "portal_result.json" {
+            return false;
+        }
+        // 通用模型的输入权重不进入展示区，只展示 yaml/txt 等结果，
+        // 避免 .pt / .om 抢占"处理文件展示区"的 5 个名额。
+        let extension = Path::new(path)
+            .extension()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if matches!(
+            extension.as_str(),
+            "pt" | "om" | "onnx" | "engine" | "torchscript"
+        ) {
+            return false;
+        }
     }
     if let Some(names) = authority.visible_file_names(model) {
         let filename = Path::new(path)

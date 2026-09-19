@@ -37,6 +37,7 @@ Tab_content:
         - id: input_folder
           name: 导入文件夹（含 model_descriptor.yaml 与模型文件）
           kind: folder
+          accept: .pt,.om,.yaml,.yml
           required: true
       changes:
         - id: run
@@ -46,33 +47,16 @@ Tab_content:
       parameters:
         - id: ability_id
           name: 能力 ID（仅无锚点时生效）
-          type: select
+          type: text
           default: ""
-          options:
-            - value: ""
-              label: （自动：锚点模式）
-            - value: light_pgdzsd_mn
-              label: light_pgdzsd_mn mn屏柜大指示灯状态
-            - value: light_pgxzsd_mn
-              label: light_pgxzsd_mn mn屏柜小指示灯状态
-            - value: switch_pgbhyb_mn
-              label: switch_pgbhyb_mn mn屏柜保护压板状态
-            - value: switch_pgkqkg_mn
-              label: switch_pgkqkg_mn mn屏柜空开状态
-            - value: switch_pgxnbs_p
-              label: switch_pgxnbs_p 屏柜旋钮把手状态
-            - value: switch_cn_other
-              label: switch_cn_other 其他型储能指示
-            - value: switch_fh_other
-              label: switch_fh_other 其他型分合指示
-            - value: person
-              label: person 人员闯入
-            - value: meter_digital_led
-              label: meter_digital_led LED数值显示器读数
-            - value: meter_byq_yw
-              label: meter_byq_yw 变压器油温表读数
+          required: false
+        - id: anchor_override
+          name: 锚点选择（仅在检测到多个候选时使用）
+          type: text
+          default: ""
+          required: false
     parameter_combinations:
-      - [ability_id]
+      - [ability_id, anchor_override]
     Log_Display: true
     Display_imported_folder: true
 
