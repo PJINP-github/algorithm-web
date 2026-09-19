@@ -1,0 +1,4 @@
+python-pptx>=0.6.21
+openpyxl>=3.0.0
+PyYAML>=6.0
+matplotlib>=3.5

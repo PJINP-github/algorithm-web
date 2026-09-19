@@ -27,6 +27,43 @@ rows_downloaded_file_algorithm: 8
 # 通用模型标签页。固定标签页仍由 Rust/JavaScript 保持原实现；
 # 这里的模型只需要提供受控 portal_entry.py 入口即可接入网页。
 Tab_content:
+  - id: project_closing_ppt
+    name: 结项报告
+    description: 根据站点 xlsx 生成结项 PPT
+    model_dir: Project_Closing_PPT-tag0.0.1+python
+    entry: portal_entry.py
+    Component_elements:
+      import:
+        - id: input_file
+          name: 导入站点 xlsx（可留空以使用 config.xlsxway）
+          kind: file
+          accept: .xlsx
+          required: false
+      changes:
+        - id: generate
+          name: 生成结项 PPT
+          description: 根据站点数据生成 PPT
+          action: generate
+      parameters:
+        - id: station_name
+          name: 站点名称
+          type: text
+          default: ""
+          required: true
+        - id: accuracy_field
+          name: 准确率字段
+          type: select
+          default: 准确率
+          options:
+            - value: 准确率
+              label: 准确率
+            - value: 审核后准确率
+              label: 审核后准确率
+    parameter_combinations:
+      - [station_name, accuracy_field]
+    Log_Display: true
+    Display_imported_folder: true
+    
   - id: image_filtering
     name: 图片
     description: 图片相似分组、模糊图处理和样本报表。
@@ -99,6 +136,7 @@ Feature_Tab_Visibility:
     Weekly-Report-Print: true
     Trueno-Inference: true
     image_filtering: true
+    project_closing_ppt: true
 
   # 普通一级：默认只显示日志转换。
   Standard_Level_1_User_Privileges:
@@ -302,7 +340,8 @@ Administrator_Rights:
   auth.register: true
   auth.logout: true
   workspace.view: true
-
+  model.project_closing_ppt.generate: true
+  
   # 文件列表、上传、下载、本机打开和文本读取权限。
   files.list: true
   files.upload: true

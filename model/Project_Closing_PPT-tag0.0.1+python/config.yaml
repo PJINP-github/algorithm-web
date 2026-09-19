@@ -1,0 +1,79 @@
+# 结项 PPT 生成配置
+
+# 准确率阈值：低于该值视为"低准确率算法"（百分比）
+accuracy_threshold: 95.0
+
+# 低准确率页每页最多展示的算法条数
+low_accuracy_per_page: 12
+
+# 默认展示与判定的准确率字段；本地或网页运行时均可覆盖
+accuracy_field: 准确率
+
+# 预先配置的 xlsx 路径列表（兼容 Linux / Windows 风格）。
+xlsxway:
+  - /home/p/software/algorithm-web/model/Weekly-Report-Print-tag-0.0.8+python/date_review/portal_data/u1_panjinping/result-2.xlsx
+  - /home/p/software/algorithm-web/model/Weekly-Report-Print-tag-0.0.8+python/date_review/portal_data/u2_qijiale/result-2.xlsx
+  # Windows 示例：
+  # - D:\Code\18.algorithm-web\model\Weekly-Report-Print-tag-0.0.8+python\date_review\portal_data\u1_panjinping\result-2.xlsx
+
+# 页面标题
+page_titles:
+  summary: "1-算法整体汇总."
+  low_accuracy: "2-低准确率详细."
+
+# 文本框位置（两页共用）
+text_style:
+  font_size: 19
+  color: "000000"
+  top_px: 148
+  left_px: 81
+
+# 汇总页右侧图片区域
+summary_image:
+  width_ratio: 0.60
+  max_height_ratio: 0.92
+  min_area_ratio: 0.50
+  right_padding_px: 20
+  text_column_ratio: 0.36
+
+# 低准确率页布局与段落间距（单位 pt）
+low_accuracy_layout:
+  title_space_after_pt: 10
+  name_space_after_pt: 3
+  info_space_after_pt: 3
+  gap_space_after_pt: 14
+  image_placeholder_width_px: 520
+  image_placeholder_height_px: 600
+
+# 表格图片样式
+table_style:
+  header_bg: "#4F81BD"          # 列头背景色（默认蓝色）
+  header_fg: "#FFFFFF"          # 列头文字色
+  header_bold: true             # 列头加粗
+  zebra_even_bg: "#F2F2F2"      # 奇数数据行背景（浅灰）
+  zebra_odd_bg: "#FFFFFF"       # 偶数数据行背景（白）
+  show_index: true              # 是否在最左侧添加序号列
+  index_header: "序号"           # 序号列列头
+  cell_edge_color: "#BFBFBF"    # 单元格边框色
+  cell_edge_width: 0.6          # 单元格边框线宽
+
+# 静默模式识别子串
+Specify_silent_mode_group:
+  - substring: 静默
+  - substring: 吸烟
+  - substring: 人员闯入
+  - substring: 越线闯入
+  - substring: 未穿安全帽
+  - substring: 火灾烟雾
+  - substring: 未穿工装
+  - substring: 明火
+  - substring: 烟雾
+  - substring: 未穿安全带
+  - substring: 物品遗漏
+  - substring: 渗漏油地面油污
+  - substring: 人员聚集
+  - substring: 地面油污
+  - substring: 玩手机
+  - substring: 火焰
+  - substring: 小动物闯入
+  - substring: 异物_

@@ -18,6 +18,7 @@
 !/model/Offline_Package_Organization-tag-0.0.12+python/
 !/model/trueno3_src-master-0.0.10/
 !/model/Weekly-Report-Print-tag-0.0.8+python/
+!/model/Project_Closing_PPT-tag0.0.1+python/
 
 # ========== Log_Review 层 ==========
 /model/Log_Review-tag-0.0.1+python/*
@@ -51,3 +52,46 @@
 # ========== Weekly-Report 层 ==========
 /model/Weekly-Report-Print-tag-0.0.8+python/*
 !/model/Weekly-Report-Print-tag-0.0.8+python/*.py
+
+# ========== Project_Closing_PPT 层 ==========
+# 先忽略整个模型目录
+/model/Project_Closing_PPT-tag0.0.1+python/*
+# 代码入口与运行脚本
+!/model/Project_Closing_PPT-tag0.0.1+python/portal_entry.py
+!/model/Project_Closing_PPT-tag0.0.1+python/gen_ppt.bat
+# 配置、依赖说明、README
+!/model/Project_Closing_PPT-tag0.0.1+python/config.yaml
+!/model/Project_Closing_PPT-tag0.0.1+python/requirements.txt
+!/model/Project_Closing_PPT-tag0.0.1+python/README.md
+# PPT 模板（运行时必需）
+!/model/Project_Closing_PPT-tag0.0.1+python/model-aiglrithm.pptx
+# 源码目录
+!/model/Project_Closing_PPT-tag0.0.1+python/src/
+
+# src 层：只保留直接子级的 .py
+/model/Project_Closing_PPT-tag0.0.1+python/src/*
+!/model/Project_Closing_PPT-tag0.0.1+python/src/*.py
+
+# 运行时产出与临时文件（显式再排除一次，防止被上面的放行规则带回）
+/model/Project_Closing_PPT-tag0.0.1+python/portal_inputs/
+/model/Project_Closing_PPT-tag0.0.1+python/portal_outputs/
+/model/Project_Closing_PPT-tag0.0.1+python/.portal_tmp/
+/model/Project_Closing_PPT-tag0.0.1+python/images/
+/model/Project_Closing_PPT-tag0.0.1+python/*_算法结项_*.pptx
+
+# ========== 通用忽略：缓存与虚拟环境 ==========
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.venv/
+venv/
+env/
+ENV/
+.runtime-cache/
+.portal_tmp/
+.portal_recycle/
