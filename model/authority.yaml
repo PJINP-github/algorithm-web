@@ -27,6 +27,55 @@ rows_downloaded_file_algorithm: 8
 # 通用模型标签页。固定标签页仍由 Rust/JavaScript 保持原实现；
 # 这里的模型只需要提供受控 portal_entry.py 入口即可接入网页。
 Tab_content:
+  - id: model_descriptor_updater
+    name: 模型描述更新
+    description: 按 Algorithm_Order 白名单替换 model_descriptor.yaml 中的 param
+    model_dir: Model_Descriptor_Updater-tag0.0.1+python
+    entry: portal_entry.py
+    Component_elements:
+      import:
+        - id: input_folder
+          name: 导入文件夹（含 model_descriptor.yaml 与模型文件）
+          kind: folder
+          required: true
+      changes:
+        - id: run
+          name: 执行替换
+          description: 按白名单替换 yaml 中的 param
+          action: run
+      parameters:
+        - id: ability_id
+          name: 能力 ID（仅无锚点时生效）
+          type: select
+          default: ""
+          options:
+            - value: ""
+              label: （自动：锚点模式）
+            - value: light_pgdzsd_mn
+              label: light_pgdzsd_mn mn屏柜大指示灯状态
+            - value: light_pgxzsd_mn
+              label: light_pgxzsd_mn mn屏柜小指示灯状态
+            - value: switch_pgbhyb_mn
+              label: switch_pgbhyb_mn mn屏柜保护压板状态
+            - value: switch_pgkqkg_mn
+              label: switch_pgkqkg_mn mn屏柜空开状态
+            - value: switch_pgxnbs_p
+              label: switch_pgxnbs_p 屏柜旋钮把手状态
+            - value: switch_cn_other
+              label: switch_cn_other 其他型储能指示
+            - value: switch_fh_other
+              label: switch_fh_other 其他型分合指示
+            - value: person
+              label: person 人员闯入
+            - value: meter_digital_led
+              label: meter_digital_led LED数值显示器读数
+            - value: meter_byq_yw
+              label: meter_byq_yw 变压器油温表读数
+    parameter_combinations:
+      - [ability_id]
+    Log_Display: true
+    Display_imported_folder: true
+
   - id: project_closing_ppt
     name: 结项报告
     description: 根据站点 xlsx 生成结项 PPT
@@ -137,7 +186,8 @@ Feature_Tab_Visibility:
     Trueno-Inference: true
     image_filtering: true
     project_closing_ppt: true
-
+    model_descriptor_updater: true
+    
   # 普通一级：默认只显示日志转换。
   Standard_Level_1_User_Privileges:
     Log_Review: false
@@ -341,7 +391,8 @@ Administrator_Rights:
   auth.logout: true
   workspace.view: true
   model.project_closing_ppt.generate: true
-  
+  model.model_descriptor_updater.run: true
+
   # 文件列表、上传、下载、本机打开和文本读取权限。
   files.list: true
   files.upload: true

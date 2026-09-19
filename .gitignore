@@ -101,3 +101,12 @@ node_modules/
 # Rust 会调用 identification/plot_meter_image.py（表计调试）。
 /model/Log_Review-tag-0.0.1+python/identification/*
 !/model/Log_Review-tag-0.0.1+python/identification/plot_meter_image.py
+
+# ── 12. 新增模型目录的运行产出 ────────────────────────────────────────────
+# 结项 PPT 生成：输出 pptx 与中间图片目录（images/ 已在第 5 节匹配）
+/model/Project_Closing_PPT-tag0.0.1+python/*_算法结项_*.pptx
+/model/Project_Closing_PPT-tag0.0.1+python/images/
+
+# model_descriptor 替换工具：打包输出目录（前缀 + 时间戳）
+/model/Model_Descriptor_Updater-tag0.0.1+python/model_descriptor_pack_*/
+model_descriptor_pack_*/

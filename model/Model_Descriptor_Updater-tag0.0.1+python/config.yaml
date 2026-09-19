@@ -1,0 +1,54 @@
+# model_descriptor.yaml 参数替换工具配置
+
+# 需要识别的模型文件后缀（不区分大小写）
+model_file_suffixes:
+  - .pt
+  - .om
+
+# 导入文件夹中目标 yaml 的文件名
+model_descriptor_name: model_descriptor.yaml
+
+# 输出打包文件夹前缀；实际名称为 <prefix>_<YYYYMMDD_HHMM>
+output_folder_prefix: model_descriptor_pack
+
+# 模型推理能力白名单及显示顺序；不在此列表中的能力不参与替换
+Algorithm_Order:
+  - id: light_pgdzsd_mn
+    desc: mn屏柜大指示灯状态
+    substring: at-det-pg.m
+
+  - id: light_pgxzsd_mn
+    desc: mn屏柜小指示灯状态
+    substring: at-det-pg.m
+
+  - id: switch_pgbhyb_mn
+    desc: mn屏柜保护压板状态
+    substring: at-det-pg.m
+
+  - id: switch_pgkqkg_mn
+    desc: mn屏柜空开状态
+    substring: at-det-pg.m
+
+  - id: switch_pgxnbs_p
+    desc: 屏柜旋钮把手状态
+    substring: at-pose-pgxnbs.m
+
+  - id: switch_cn_other
+    desc: 其他型储能指示
+    substring: at-det-fhzcn.m-yolov8det-cn
+
+  - id: switch_fh_other
+    desc: 其他型分合指示
+    substring: at-det-fhzfh.m-yolov8det-fh
+
+  - id: person
+    desc: 人员闯入
+    substring: at-det-person.m-yolov8det-person
+
+  - id: meter_digital_led
+    desc: LED数值显示器读数
+    substring: at-dm-common-paddleocr.m-dm-ocr-meter-common-paddleocr
+
+  - id: meter_byq_yw
+    desc: 变压器油温表读数
+    substring: at-pmcnc-single.m-pmcnc-pose-marks-single
