@@ -74,6 +74,8 @@ pub struct FileInfo {
     pub path: String,
     pub name: String,
     pub display_name: String,
+    #[serde(default)]
+    pub kind: String,
     pub size: u64,
     pub modified: Option<String>,
 }
@@ -86,6 +88,18 @@ pub struct WorkspaceModel {
     pub actions: Vec<WorkspaceAction>,
     pub config_files: Vec<String>,
     pub log_visual_lines: usize,
+    #[serde(default)]
+    pub generic: bool,
+    #[serde(default)]
+    pub imports: Vec<crate::authority::GenericImport>,
+    #[serde(default)]
+    pub parameters: Vec<crate::authority::GenericParameter>,
+    #[serde(default)]
+    pub parameter_combinations: Vec<Vec<String>>,
+    #[serde(default)]
+    pub display_imported_folder: bool,
+    #[serde(default)]
+    pub latest_temporal_display_file: Option<crate::authority::LatestTemporalDisplay>,
 }
 
 #[derive(serde::Serialize)]
@@ -147,6 +161,8 @@ pub struct UploadResponse {
     pub path: String,
     pub name: String,
     pub display_name: String,
+    #[serde(default)]
+    pub kind: String,
 }
 
 #[derive(serde::Serialize)]

@@ -7,6 +7,8 @@
 !/src/
 !/Document/
 !/model/
+!/run.bat
+!/tools/
 
 # ========== model 层：先忽略 model 下所有，再放行想要的 ==========
 /model/*

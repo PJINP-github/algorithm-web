@@ -20,14 +20,17 @@ const state = {
     suppressStopClick: false,
     currentConfigPath: "",
     selectedUploads: {},
+    genericUploads: {},
+    genericParameterCombination: {},
     latestReportPath: "",
     latestWeeklyFiles: {},
     truenoCatalog: null,
     truenoCatalogLoading: false,
     truenoCatalogPromise: null,
     truenoImageDataUrl: "",
-    truenoRoiPoints: [],
-    truenoRoiDrawing: false,
+    truenoCalibrationPoints: [],
+    truenoCalibrationPolygons: [],
+    truenoCalibrationDrawing: false,
     truenoPointHelpers: [],
     truenoSavedPointHelpers: [],
     truenoPointSelectionKey: "",
@@ -40,6 +43,7 @@ const state = {
     truenoZoom: 1,
     truenoZoomOrigin: { x: 50, y: 50 },
     truenoMode: localStorage.getItem("portal_trueno_mode") || "auto",
+    truenoInferenceMode: "local",
     truenoSelection: null,
     startingAction: false,
     codes: [],
@@ -87,7 +91,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             closeTruenoModelMenu();
         }
     });
-    window.addEventListener("resize", renderLog);
+    window.addEventListener("resize", () => {
+        renderLog();
+        fitGenericRows();
+    });
     await loadCatalog();
     await refreshRunningJobs();
     state.runningRefreshTimer = window.setInterval(refreshRunningJobs, 1500);
@@ -140,8 +147,12 @@ function renderTabs() {
 
 async function selectModel(modelId) {
     const requestId = ++state.modelRequestId;
+    const previousModelId = state.activeModel;
     state.modelLoading = true;
     state.activeModel = modelId;
+    if (modelId !== "trueno" || previousModelId !== "trueno") {
+        state.truenoInferenceMode = "local";
+    }
     state.filePage = 0;
     state.currentConfigPath = "";
     resetSidePanelForModel(modelId);
@@ -177,9 +188,10 @@ function resetSidePanelForModel(modelId) {
     saveTruenoPoints(true);
     cancelTruenoPointsAutosave();
     state.truenoPointDrawing = false;
-    state.truenoRoiDrawing = false;
-    state.truenoRoiPoints = [];
-    updateTruenoRoiButton();
+    state.truenoCalibrationDrawing = false;
+    state.truenoCalibrationPoints = [];
+    state.truenoCalibrationPolygons = [];
+    updateTruenoCalibrationButton();
     if (modelId !== "trueno") {
         state.truenoNeedsPointHelpers = false;
         state.truenoPointPage = 0;
@@ -226,10 +238,13 @@ function applyLogDisplaySettings() {
 
 function renderPanel() {
     const model = activeModel();
+    const panel = $("#workspace-panel");
     if (!model) {
-        $("#workspace-panel").textContent = "模型不存在。";
+        panel.classList.remove("generic-panel");
+        panel.textContent = "模型不存在。";
         return;
     }
+    panel.classList.toggle("generic-panel", Boolean(model.generic));
     if (model.id === "auth") {
         renderAuthPanel(model);
         return;
@@ -238,7 +253,11 @@ function renderPanel() {
         renderTruenoPanel();
         return;
     }
-    $("#workspace-panel").innerHTML = `
+    if (model.generic) {
+        renderGenericPanel(model);
+        return;
+    }
+    panel.innerHTML = `
         <div class="section-head">
             <h2>${model.name}</h2>
             <p class="status-line" id="status-line">请选择文件或运行模式。</p>
@@ -283,6 +302,215 @@ function renderAuthPanel(model) {
     $("#refresh-codes-button").addEventListener("click", loadCodes);
 }
 
+function renderGenericPanel(model) {
+    $("#workspace-panel").innerHTML = `
+        <div class="section-head">
+            <h2>${escapeHtml(model.name)}</h2>
+            <p class="status-line" id="status-line">选择输入、处理模式和参数后运行。</p>
+        </div>
+        <div class="generic-control-row" id="generic-control-row">
+            <div class="generic-imports" id="generic-imports"></div>
+            <div class="generic-parameter-bar" id="generic-parameter-bar"></div>
+            <div class="generic-parameters" id="generic-parameters"></div>
+        </div>
+        <div class="action-grid generic-action-grid" id="action-grid"></div>
+        <div class="file-box">
+            <div class="section-head">
+                <h3>处理文件</h3>
+            </div>
+            <div class="file-list" id="file-list"></div>
+            <a class="review-link primary" id="review-link" target="_blank" rel="noreferrer">打开输出目录</a>
+        </div>
+    `;
+    renderGenericImports(model);
+    renderGenericParameters(model);
+    renderActions();
+    fitGenericRows();
+}
+
+function renderGenericImports(model) {
+    const container = $("#generic-imports");
+    if (!container) return;
+    const imports = Array.isArray(model.imports) ? model.imports : [];
+    const uploads = state.genericUploads[state.activeModel] || {};
+    container.innerHTML = imports.map(item => {
+        const isFolder = String(item.kind || "file").toLowerCase() === "folder";
+        const selected = uploads[item.id];
+        return `
+            <label class="upload-label-button generic-import-control">
+                ${escapeHtml(item.name)}
+                <input type="file"
+                    data-generic-import="${escapeHtml(item.id)}"
+                    accept="${escapeHtml(item.accept || "")}"
+                    ${isFolder ? "webkitdirectory directory multiple" : ""}
+                    ${item.required ? "required" : ""}>
+            </label>
+            <span class="selected-file generic-import-name" data-generic-import-name="${escapeHtml(item.id)}">
+                ${escapeHtml(selected?.name || (isFolder ? "未选择文件夹" : "未选择文件"))}
+            </span>
+        `;
+    }).join("");
+    for (const input of container.querySelectorAll("[data-generic-import]")) {
+        const item = imports.find(candidate => candidate.id === input.dataset.genericImport);
+        input.addEventListener("change", () => uploadGenericImport(item, input));
+    }
+}
+
+async function uploadGenericImport(item, input) {
+    if (!item || !input?.files?.length) {
+        setStatus("请选择要导入的文件或文件夹。");
+        return;
+    }
+    const files = [...input.files];
+    const data = new FormData();
+    data.set("slot", item.id);
+    for (const file of files) {
+        data.append("file", file, file.webkitRelativePath || file.name);
+    }
+    setStatus(`正在导入${item.name}... 0%`);
+    const result = await uploadWithProgress(
+        `/api/files/upload?model=${encodeURIComponent(state.activeModel)}&slot=${encodeURIComponent(item.id)}`,
+        data,
+        percent => setStatus(`正在导入${item.name}... ${percent}%`),
+    ).catch(error => ({ ok: false, result: { message: error.message || "导入失败" } }));
+    if (!result.ok) {
+        setStatus(result.result.message || "导入失败。");
+        return;
+    }
+    if (!state.genericUploads[state.activeModel]) {
+        state.genericUploads[state.activeModel] = {};
+    }
+    state.genericUploads[state.activeModel][item.id] = {
+        path: result.result.path,
+        name: result.result.display_name || result.result.name || item.name,
+        kind: result.result.kind || item.kind || "file",
+    };
+    const label = document.querySelector(
+        `[data-generic-import-name="${cssEscape(item.id)}"]`,
+    );
+    if (label) {
+        label.textContent = state.genericUploads[state.activeModel][item.id].name;
+    }
+    input.value = "";
+    setStatus(`已导入：${state.genericUploads[state.activeModel][item.id].name}`);
+    fitGenericRows();
+}
+
+function cssEscape(value) {
+    if (window.CSS?.escape) return window.CSS.escape(String(value));
+    return String(value).replace(/[^a-zA-Z0-9_-]/g, "\\$&");
+}
+
+function renderGenericParameters(model) {
+    const bar = $("#generic-parameter-bar");
+    const panel = $("#generic-parameters");
+    if (!bar || !panel) return;
+    const combinations = Array.isArray(model.parameter_combinations)
+        ? model.parameter_combinations
+        : [];
+    if (combinations.length > 1) {
+        const selected = Number.isInteger(state.genericParameterCombination[state.activeModel])
+            ? state.genericParameterCombination[state.activeModel]
+            : 0;
+        state.genericParameterCombination[state.activeModel] =
+            Math.min(Math.max(selected, 0), combinations.length - 1);
+        bar.innerHTML = `
+            <label>参数组合
+                <select id="generic-parameter-combination">
+                    ${combinations.map((_, index) =>
+                        `<option value="${index}" ${index === state.genericParameterCombination[state.activeModel] ? "selected" : ""}>组合 ${index + 1}</option>`
+                    ).join("")}
+                </select>
+            </label>
+        `;
+        $("#generic-parameter-combination").addEventListener("change", event => {
+            state.genericParameterCombination[state.activeModel] = Number(event.target.value) || 0;
+            renderGenericParameters(model);
+            fitGenericRows();
+        });
+    } else {
+        bar.innerHTML = "";
+    }
+    const visibleIds = genericVisibleParameterIds(model);
+    const parameters = (model.parameters || []).filter(parameter =>
+        visibleIds.includes(parameter.id),
+    );
+    panel.innerHTML = parameters.map(parameterControlHtml).join("");
+    fitGenericRows();
+}
+
+function fitGenericRows() {
+    const panel = $("#workspace-panel");
+    if (!panel?.classList.contains("generic-panel")) return;
+    const rows = document.querySelectorAll(".generic-control-row, .generic-action-grid");
+    for (const row of rows) {
+        row.classList.remove("is-compact", "is-ultra-compact");
+        if (row.scrollWidth > row.clientWidth + 1) {
+            row.classList.add("is-compact");
+        }
+        if (row.scrollWidth > row.clientWidth + 1) {
+            row.classList.add("is-ultra-compact");
+        }
+    }
+}
+
+function genericVisibleParameterIds(model) {
+    const combinations = Array.isArray(model.parameter_combinations)
+        ? model.parameter_combinations
+        : [];
+    if (!combinations.length) return (model.parameters || []).map(parameter => parameter.id);
+    const index = Math.min(
+        Math.max(Number(state.genericParameterCombination[state.activeModel]) || 0, 0),
+        combinations.length - 1,
+    );
+    return combinations[index]
+        .map(value => {
+            const raw = String(value);
+            if ((model.parameters || []).some(parameter => parameter.id === raw)) return raw;
+            const numeric = Number(raw);
+            return Number.isInteger(numeric) ? model.parameters?.[numeric - 1]?.id : null;
+        })
+        .filter(Boolean);
+}
+
+function parameterControlHtml(parameter) {
+    const type = String(parameter.parameter_type || "text").toLowerCase();
+    const value = parameter.default ?? "";
+    const options = Array.isArray(parameter.options) ? parameter.options : [];
+    if (type === "checkbox") {
+        return `
+            <label class="generic-parameter generic-checkbox">
+                <input type="checkbox" data-generic-parameter="${escapeHtml(parameter.id)}" ${value === true ? "checked" : ""}>
+                <span>${escapeHtml(parameter.name)}</span>
+            </label>
+        `;
+    }
+    if (type === "select" || type === "multi_select") {
+        return `
+            <label class="generic-parameter">
+                <span>${escapeHtml(parameter.name)}</span>
+                <select data-generic-parameter="${escapeHtml(parameter.id)}" ${type === "multi_select" ? "multiple" : ""}>
+                    ${options.map(option => {
+                        const optionValue = option.value ?? "";
+                        const selected = Array.isArray(value)
+                            ? value.map(String).includes(String(optionValue))
+                            : String(value) === String(optionValue);
+                        return `<option value="${escapeHtml(optionValue)}" ${selected ? "selected" : ""}>${escapeHtml(option.label || optionValue)}</option>`;
+                    }).join("")}
+                </select>
+            </label>
+        `;
+    }
+    return `
+        <label class="generic-parameter">
+            <span>${escapeHtml(parameter.name)}</span>
+            <input type="${type === "number" ? "number" : "text"}"
+                data-generic-parameter="${escapeHtml(parameter.id)}"
+                value="${escapeHtml(value)}">
+        </label>
+    `;
+}
+
 function renderTruenoPanel() {
     normalizeTruenoMode();
     $("#workspace-panel").innerHTML = `
@@ -295,7 +523,8 @@ function renderTruenoPanel() {
             <button type="button" id="trueno-mode-button" class="trueno-mode-button"></button>
             ${truenoModelControl()}
             <button type="button" class="primary" id="trueno-infer-button">模型推理</button>
-            <button type="button" id="trueno-roi-button">ROI</button>
+            <button type="button" id="trueno-inference-mode-button">推理链路</button>
+            <button type="button" id="trueno-calibration-button">标定框</button>
             <button type="button" id="trueno-points-button" class="hidden">点绘制</button>
             <span class="selected-file" id="selected-file-name">${selectedUploadLabel()}</span>
         </div>
@@ -304,10 +533,13 @@ function renderTruenoPanel() {
                 <canvas id="trueno-image-canvas"></canvas>
             </div>
         </div>
+        <div id="trueno-result-panel" class="trueno-result-panel hidden"></div>
     `;
     $("#upload-file").addEventListener("change", uploadFile);
     updateTruenoModeButton();
     $("#trueno-mode-button").addEventListener("click", cycleTruenoMode);
+    updateTruenoInferenceButton();
+    $("#trueno-inference-mode-button").addEventListener("click", toggleTruenoInferenceMode);
     const modelUpload = $("#trueno-model-upload");
     if (modelUpload) {
         modelUpload.addEventListener("change", uploadTruenoModels);
@@ -315,19 +547,50 @@ function renderTruenoPanel() {
         $("#trueno-model-button").addEventListener("click", toggleTruenoModelMenu);
     }
     $("#trueno-infer-button").addEventListener("click", () => startAction("infer"));
-    $("#trueno-roi-button").addEventListener("click", toggleTruenoRoi);
+    $("#trueno-calibration-button").addEventListener("click", toggleTruenoCalibration);
     $("#trueno-points-button").addEventListener("click", toggleTruenoPoints);
     $("#trueno-image-canvas").addEventListener("click", handleTruenoCanvasClick);
-    $("#trueno-image-canvas").addEventListener("contextmenu", finishTruenoRoi);
+    $("#trueno-image-canvas").addEventListener("contextmenu", finishTruenoCalibration);
     $("#trueno-image-viewport").addEventListener("wheel", zoomTruenoImage, { passive: false });
     renderTruenoModelOptions();
     renderTruenoImage();
+    renderTruenoResult();
 }
 
 function normalizeTruenoMode() {
     if (!["auto", "local", "import"].includes(state.truenoMode)) {
         state.truenoMode = "auto";
     }
+}
+
+function normalizeTruenoInferenceMode() {
+    if (!["local", "src"].includes(state.truenoInferenceMode)) {
+        state.truenoInferenceMode = "local";
+    }
+}
+
+function updateTruenoInferenceButton() {
+    const button = $("#trueno-inference-mode-button");
+    if (!button) return;
+    normalizeTruenoInferenceMode();
+    button.textContent = "推理链路";
+    button.classList.toggle("mode-src", state.truenoInferenceMode === "src");
+    button.classList.toggle("mode-local", state.truenoInferenceMode === "local");
+    button.title = state.truenoInferenceMode === "src"
+        ? "当前使用 algorithm/src 推理，点击切换为本地自推理"
+        : "当前使用本地自推理，点击切换为 algorithm/src 推理";
+}
+
+function toggleTruenoInferenceMode() {
+    normalizeTruenoInferenceMode();
+    state.truenoInferenceMode = state.truenoInferenceMode === "local" ? "src" : "local";
+    updateTruenoInferenceButton();
+    state.truenoResult = null;
+    renderTruenoImage();
+    renderTruenoResult();
+    setStatus(state.truenoInferenceMode === "src"
+        ? "已切换为 algorithm/src 推理。"
+        : "已切换为本地自推理。");
 }
 
 function truenoModeLabel(mode = state.truenoMode) {
@@ -470,8 +733,11 @@ function renderTruenoModelOptions() {
     if (!abilities || !models) return;
     normalizeTruenoMode();
     const entries = (state.truenoCatalog?.entries || []).filter(entry =>
+        entry.supported !== false &&
         (entry.stages || []).some(stage =>
-            ["yolo", "crnn", "ppocr"].includes(stage.executor) && stage.executable
+            stage.executable ||
+            stage.source_chain ||
+            stage.executor === "src"
         )
     );
     abilities.innerHTML = entries.map(entry =>
@@ -753,11 +1019,9 @@ function toggleTruenoPoints() {
     if (!state.truenoNeedsPointHelpers) return;
     state.truenoPointDrawing = !state.truenoPointDrawing;
     if (state.truenoPointDrawing) {
-        state.truenoRoiDrawing = false;
-        state.truenoRoiPoints = [];
-        updateTruenoRoiButton();
-        const roiButton = $("#trueno-roi-button");
-        if (roiButton) roiButton.textContent = "ROI";
+        state.truenoCalibrationDrawing = false;
+        state.truenoCalibrationPoints = [];
+        updateTruenoCalibrationButton();
     }
     const button = $("#trueno-points-button");
     if (button) {
@@ -770,7 +1034,7 @@ function toggleTruenoPoints() {
 
 function handleTruenoCanvasClick(event) {
     if (state.truenoPointDrawing) addTruenoPoint(event);
-    else addTruenoRoiPoint(event);
+    else addTruenoCalibrationPoint(event);
 }
 
 function addTruenoPoint(event) {
@@ -832,14 +1096,20 @@ function escapeHtml(value) {
     }[character]));
 }
 
-function toggleTruenoRoi() {
-    if (state.truenoRoiDrawing || state.truenoRoiPoints.length >= 3) {
-        state.truenoRoiDrawing = false;
-        state.truenoRoiPoints = [];
+function toggleTruenoCalibration() {
+    if (
+        state.truenoCalibrationDrawing ||
+        state.truenoCalibrationPoints.length ||
+        state.truenoCalibrationPolygons.length
+    ) {
+        state.truenoCalibrationDrawing = false;
+        state.truenoCalibrationPoints = [];
+        state.truenoCalibrationPolygons = [];
         state.truenoResult = null;
-        updateTruenoRoiButton();
+        updateTruenoCalibrationButton();
         renderTruenoImage();
-        setStatus("ROI 已取消。");
+        renderTruenoResult();
+        setStatus("标定框已清除。");
         return;
     }
     state.truenoPointDrawing = false;
@@ -849,37 +1119,47 @@ function toggleTruenoRoi() {
         pointsButton.textContent = "点绘制";
         pointsButton.classList.remove("active");
     }
-    state.truenoRoiPoints = [];
-    state.truenoRoiDrawing = true;
+    state.truenoCalibrationPoints = [];
+    state.truenoCalibrationPolygons = [];
+    state.truenoCalibrationDrawing = true;
     state.truenoResult = null;
-    updateTruenoRoiButton();
+    updateTruenoCalibrationButton();
     renderTruenoImage();
-    setStatus("请在图片上逐点绘制 ROI，右键结束。");
+    renderTruenoResult();
+    setStatus("左键添加标定点，右键闭合当前标定框；每个标定框至少需要 4 个点。");
 }
 
-function updateTruenoRoiButton() {
-    const button = $("#trueno-roi-button");
+function updateTruenoCalibrationButton() {
+    const button = $("#trueno-calibration-button");
     if (!button) return;
-    const active = state.truenoRoiDrawing || state.truenoRoiPoints.length >= 3;
+    const active = state.truenoCalibrationDrawing ||
+        state.truenoCalibrationPoints.length ||
+        state.truenoCalibrationPolygons.length;
     button.classList.toggle("active", active);
-    button.textContent = state.truenoRoiDrawing ? "ROI绘制中" : "ROI";
-    button.title = active ? "点击取消 ROI" : "点击启用 ROI";
+    button.textContent = "标定框";
+    button.title = active
+        ? "点击清除标定框"
+        : "点击开始绘制标定框";
 }
 
-function addTruenoRoiPoint(event) {
-    if (!state.truenoRoiDrawing) return;
+function truenoCanvasPoint(event) {
     const canvas = event.currentTarget;
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-    state.truenoRoiPoints.push([
+    return [
         Math.round((event.clientX - rect.left) * scaleX),
         Math.round((event.clientY - rect.top) * scaleY),
-    ]);
+    ];
+}
+
+function addTruenoCalibrationPoint(event) {
+    if (!state.truenoCalibrationDrawing) return;
+    state.truenoCalibrationPoints.push(truenoCanvasPoint(event));
     renderTruenoImage();
 }
 
-function finishTruenoRoi(event) {
+function finishTruenoCalibration(event) {
     event.preventDefault();
     if (state.truenoPointDrawing) {
         state.truenoPointDrawing = false;
@@ -891,13 +1171,26 @@ function finishTruenoRoi(event) {
         scheduleTruenoPointsAutosave(0);
         setStatus("点绘制已完成，可在右侧填写点数值。");
     }
-    if (!state.truenoRoiDrawing) return;
-    state.truenoRoiDrawing = false;
-    if (state.truenoRoiPoints.length < 3) {
-        state.truenoRoiPoints = [];
+    if (!state.truenoCalibrationDrawing) return;
+    if (state.truenoCalibrationPoints.length < 4) {
+        const point = truenoCanvasPoint(event);
+        const previous = state.truenoCalibrationPoints[
+            state.truenoCalibrationPoints.length - 1
+        ];
+        if (!previous || previous[0] !== point[0] || previous[1] !== point[1]) {
+            state.truenoCalibrationPoints.push(point);
+        }
     }
-    updateTruenoRoiButton();
-    setStatus(state.truenoRoiPoints.length >= 3 ? "ROI 已设置。" : "ROI 至少需要 3 个点，已取消。");
+    if (state.truenoCalibrationPoints.length < 4) {
+        updateTruenoCalibrationButton();
+        setStatus("标定框至少需要 4 个点，当前未闭合。");
+        renderTruenoImage();
+        return;
+    }
+    state.truenoCalibrationPolygons.push([...state.truenoCalibrationPoints]);
+    state.truenoCalibrationPoints = [];
+    updateTruenoCalibrationButton();
+    setStatus(`已闭合第 ${state.truenoCalibrationPolygons.length} 个标定框，可继续绘制。`);
     renderTruenoImage();
 }
 
@@ -921,20 +1214,32 @@ function renderTruenoImage() {
         canvas.classList.remove("empty");
         canvas.getContext("2d").drawImage(image, 0, 0);
         const context = canvas.getContext("2d");
-        if (!state.truenoResult?.annotated_image && state.truenoRoiPoints.length) {
-            context.beginPath();
-            state.truenoRoiPoints.forEach((point, index) => {
-                if (index === 0) context.moveTo(point[0], point[1]);
-                else context.lineTo(point[0], point[1]);
-            });
-            context.strokeStyle = "#f5b700";
-            context.lineWidth = Math.max(2, canvas.width / 500);
-            context.stroke();
-            state.truenoRoiPoints.forEach(point => {
+        if (!state.truenoResult?.annotated_image) {
+            const polygons = [
+                ...state.truenoCalibrationPolygons.map(points => ({
+                    points,
+                    closed: true,
+                })),
+                ...(state.truenoCalibrationPoints.length
+                    ? [{ points: state.truenoCalibrationPoints, closed: false }]
+                    : []),
+            ];
+            polygons.forEach(({ points, closed }) => {
                 context.beginPath();
-                context.arc(point[0], point[1], Math.max(4, canvas.width / 180), 0, Math.PI * 2);
-                context.fillStyle = "#f5b700";
-                context.fill();
+                points.forEach((point, index) => {
+                    if (index === 0) context.moveTo(point[0], point[1]);
+                    else context.lineTo(point[0], point[1]);
+                });
+                if (closed) context.closePath();
+                context.strokeStyle = "#f5b700";
+                context.lineWidth = Math.max(2, canvas.width / 500);
+                context.stroke();
+                points.forEach(point => {
+                    context.beginPath();
+                    context.arc(point[0], point[1], Math.max(4, canvas.width / 180), 0, Math.PI * 2);
+                    context.fillStyle = "#f5b700";
+                    context.fill();
+                });
             });
         }
         if (state.truenoPointHelpers.length) {
@@ -956,6 +1261,59 @@ function renderTruenoImage() {
         }
     };
     image.src = imageSource;
+}
+
+function renderTruenoResult() {
+    const panel = $("#trueno-result-panel");
+    if (!panel) return;
+    const result = state.truenoResult;
+    if (!result) {
+        panel.classList.add("hidden");
+        panel.innerHTML = "";
+        return;
+    }
+    const categories = Array.isArray(result.categories)
+        ? result.categories
+        : (Array.isArray(result.detections) ? result.detections : []);
+    const rows = categories.length
+        ? categories.map((category, index) => {
+            const displayName = category.display_name ||
+                category.translated_name ||
+                category.class_name ||
+                category.value ||
+                "未命名类别";
+            const rawName = category.class_name && category.class_name !== displayName
+                ? `（${category.class_name}）`
+                : "";
+            const confidenceValue = category.confidence;
+            const confidence = confidenceValue !== null &&
+                confidenceValue !== undefined &&
+                confidenceValue !== "" &&
+                Number.isFinite(Number(confidenceValue))
+                ? `${(Number(confidenceValue) * 100).toFixed(1)}%`
+                : "-";
+            const source = category.source_key || category.key || `结果 ${index + 1}`;
+            return `
+                <div class="trueno-result-row">
+                    <span class="trueno-result-key">${escapeHtml(source)}</span>
+                    <strong>${escapeHtml(displayName)}${escapeHtml(rawName)}</strong>
+                    <span>${escapeHtml(confidence)}</span>
+                </div>
+            `;
+        }).join("")
+        : `<div class="trueno-result-empty">${escapeHtml(result.desc || "未返回分类结果。")}</div>`;
+    const status = result.status === "detected" ? "已识别" :
+        result.status === "empty" ? "未识别" : (result.status || "完成");
+    const chain = result.inference_mode === "src" ? "algorithm/src" : "本地自推理";
+    panel.classList.remove("hidden");
+    panel.innerHTML = `
+        <div class="trueno-result-head">
+            <strong>推理结果</strong>
+            <span>${escapeHtml(status)} · ${escapeHtml(chain)}</span>
+        </div>
+        <div class="trueno-result-list">${rows}</div>
+        ${result.desc ? `<p class="trueno-result-desc">${escapeHtml(result.desc)}</p>` : ""}
+    `;
 }
 
 function zoomTruenoImage(event) {
@@ -1053,9 +1411,20 @@ function uploadHint(modelId) {
 
 function renderActions() {
     if (state.activeModel === "trueno") return;
+    const model = activeModel();
+    const actions = Array.isArray(model?.actions) ? model.actions : [];
     const grid = $("#action-grid");
     grid.innerHTML = "";
-    for (const action of activeModel().actions) {
+    grid.classList.toggle("generic-action-grid", Boolean(model?.generic));
+    if (model?.generic) {
+        grid.style.setProperty(
+            "--generic-action-count",
+            String(Math.max(actions.length, 1)),
+        );
+    } else {
+        grid.style.removeProperty("--generic-action-count");
+    }
+    for (const action of actions) {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "action-tile";
@@ -1085,15 +1454,17 @@ async function uploadFile() {
         state.truenoSavedPointHelpers = [];
         state.truenoPointPage = 0;
         state.truenoPointLastSaved = "";
-        state.truenoRoiPoints = [];
-        state.truenoRoiDrawing = false;
+        state.truenoCalibrationPoints = [];
+        state.truenoCalibrationPolygons = [];
+        state.truenoCalibrationDrawing = false;
         localStorage.removeItem("portal_trueno_points");
         state.truenoPointDrawing = false;
         state.truenoZoom = 1;
         state.truenoZoomOrigin = { x: 50, y: 50 };
-        updateTruenoRoiButton();
+        updateTruenoCalibrationButton();
         renderTruenoPointPanel();
         renderTruenoImage();
+        renderTruenoResult();
     }
     let uploadResult = null;
     const localPath = typeof file.path === "string" ? file.path.trim() : "";
@@ -1245,12 +1616,21 @@ async function startAction(actionId) {
         return;
     }
     try {
+        if (state.activeModel === "offline") {
+            const reviewLink = $("#review-link");
+            if (reviewLink) {
+                delete reviewLink.dataset.opened;
+                reviewLink.classList.remove("visible");
+                reviewLink.removeAttribute("href");
+            }
+        }
         if (state.activeModel === "trueno") {
             state.logLines = ["等待模型推理。"];
             state.logPage = 0;
             state.truenoResult = null;
             renderLog();
             renderTruenoImage();
+            renderTruenoResult();
         }
         setStatus("任务已提交。");
         const response = await api("/api/model/run", {
@@ -1368,6 +1748,9 @@ async function cancelRunningJob(all) {
 }
 
 function actionInput(actionId) {
+    if (activeModel()?.generic) {
+        return genericActionInput(actionId);
+    }
     if (state.activeModel === "weekly" && actionId === "generate") {
         const site = $("#weekly-site").value.trim();
         if (!site) {
@@ -1421,18 +1804,70 @@ function actionInput(actionId) {
             setStatus("点绘制列表已修改，请先点击“保存”再推理。");
             return null;
         }
+        if (state.truenoCalibrationPoints.length) {
+            setStatus("当前标定框尚未闭合，请右键闭合后再推理。");
+            return null;
+        }
         return JSON.stringify({
             image: upload.path,
             ability,
             model,
             mode,
-            roi: state.truenoRoiPoints.length >= 3 ? state.truenoRoiPoints : null,
+            inference_mode: state.truenoInferenceMode || "local",
+            calibration: state.truenoCalibrationPolygons.length
+                ? state.truenoCalibrationPolygons
+                : null,
             helpers: state.truenoSavedPointHelpers.length
                 ? { points: state.truenoSavedPointHelpers }
                 : null,
         });
     }
     return "";
+}
+
+function genericActionInput(actionId) {
+    const model = activeModel();
+    const uploads = state.genericUploads[state.activeModel] || {};
+    for (const item of model.imports || []) {
+        if (item.required && !uploads[item.id]) {
+            setStatus(`请先导入：${item.name}`);
+            return null;
+        }
+    }
+    const parameters = {};
+    const parameterMap = new Map((model.parameters || []).map(parameter => [parameter.id, parameter]));
+    for (const id of genericVisibleParameterIds(model)) {
+        const parameter = parameterMap.get(id);
+        const control = document.querySelector(`[data-generic-parameter="${cssEscape(id)}"]`);
+        if (!parameter || !control) continue;
+        const type = String(parameter.parameter_type || "text").toLowerCase();
+        if (type === "checkbox") {
+            parameters[id] = control.checked;
+        } else if (type === "multi_select") {
+            parameters[id] = [...control.selectedOptions].map(option => option.value);
+        } else if (type === "number") {
+            const value = control.value.trim();
+            if (parameter.required && !value) {
+                setStatus(`请填写：${parameter.name}`);
+                return null;
+            }
+            parameters[id] = value === "" ? null : Number(value);
+        } else {
+            const value = control.value.trim();
+            if (parameter.required && !value) {
+                setStatus(`请填写：${parameter.name}`);
+                return null;
+            }
+            parameters[id] = value;
+        }
+    }
+    return JSON.stringify({
+        uploads: Object.fromEntries(
+            Object.entries(uploads).map(([id, upload]) => [id, upload.path]),
+        ),
+        parameters,
+        parameter_combination: Number(state.genericParameterCombination[state.activeModel]) || 0,
+    });
 }
 
 async function pollJob(jobId) {
@@ -1445,6 +1880,7 @@ async function pollJob(jobId) {
     if (job.model === "trueno" && job.result) {
         state.truenoResult = job.result;
         renderTruenoImage();
+        renderTruenoResult();
     }
     if (state.currentJob === jobId) {
         const lines = String(job.log || "").split(/\r?\n/);
@@ -1551,7 +1987,7 @@ function rememberGeneratedFiles(job) {
 }
 
 function detectReviewLink(log) {
-    const match = log.match(/https?:\/\/127\.0\.0\.1:\d+\/?/);
+    const match = log.match(/https?:\/\/(?:localhost|127\.0\.0\.1|(?:\d{1,3}\.){3}\d{1,3}):\d+\/?/i);
     const link = $("#review-link");
     if (!link || !match) return;
     link.href = match[0];
@@ -1648,9 +2084,18 @@ function renderFiles() {
         const nameButton = row.querySelector(".file-name");
         nameButton.textContent = file.display_name || file.name || file.path;
         nameButton.title = file.path;
-        nameButton.addEventListener("click", () => openLocal(file.path));
         row.querySelector(".file-size").textContent = formatSize(file.size);
-        row.querySelector(".download-button").addEventListener("click", () => downloadFile(file.path));
+        const downloadButton = row.querySelector(".download-button");
+        if (file.kind === "directory") {
+            nameButton.textContent = `文件夹：${file.display_name || file.name || file.path}`;
+            nameButton.title = `${file.path}（双击使用文件管理器打开）`;
+            nameButton.addEventListener("dblclick", () => openLocal(file.path));
+            downloadButton.disabled = true;
+            downloadButton.title = "文件夹不可直接下载";
+        } else {
+            nameButton.addEventListener("click", () => openLocal(file.path));
+            downloadButton.addEventListener("click", () => downloadFile(file.path));
+        }
         list.appendChild(row);
     }
 }

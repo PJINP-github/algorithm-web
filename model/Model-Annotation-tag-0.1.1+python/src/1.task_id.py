@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 import atexit
 import platform
 import time
@@ -28,6 +29,7 @@ from ask_data_utils import (
     record_exclude_reason,
     record_matches_task_filters,
     resolve_chrome_path,
+    resolve_chrome_user_data_dir,
     resolve_mapping_file,
     resolve_work_dir,
     sort_unique_records,
@@ -81,9 +83,7 @@ chrome_path = resolve_chrome_path(base_dir)
 print(f"使用浏览器: {chrome_path}")
 
 # ---------- 3. 浏览器用户数据目录（固定目录，保存登录状态）----------
-user_data_dir = os.environ.get('RUST_PORTAL_USER_DATA_DIR', '').strip() or os.path.join(base_dir, '..', 'chromium_user_data')
-user_data_dir = os.path.abspath(user_data_dir)
-os.makedirs(user_data_dir, exist_ok=True)
+user_data_dir = resolve_chrome_user_data_dir(base_dir, 'annotation')
 print(f"用户数据目录: {user_data_dir}")
 
 # ---------- 4. 调试端口 ----------
@@ -97,6 +97,106 @@ def check_browser_running(port):
         return response.status_code == 200
     except Exception:
         return False
+
+
+def wants_headless_browser():
+    override = os.environ.get('RUST_PORTAL_HEADLESS')
+    if override is not None:
+        return override.strip().lower() in ('1', 'true', 'yes', 'on')
+    return (
+        platform.system() == 'Linux'
+        and not os.environ.get('DISPLAY')
+        and not os.environ.get('WAYLAND_DISPLAY')
+    )
+
+
+def browser_metadata(port):
+    try:
+        import requests
+        response = requests.get(
+            f'http://127.0.0.1:{port}/json/version',
+            headers={'Connection': 'close'},
+            timeout=2,
+        )
+        response.raise_for_status()
+        metadata = response.json()
+        return metadata if metadata.get('webSocketDebuggerUrl') else None
+    except Exception:
+        return None
+
+
+def metadata_is_headless(metadata):
+    return 'headless' in (
+        f"{metadata.get('Browser', '')} {metadata.get('User-Agent', '')}"
+    ).lower()
+
+
+def close_headless_browser(port):
+    metadata = browser_metadata(port)
+    if not metadata or wants_headless_browser() or not metadata_is_headless(metadata):
+        return False
+    from websocket import create_connection
+
+    try:
+        connection = create_connection(
+            metadata['webSocketDebuggerUrl'],
+            timeout=3,
+            suppress_origin=True,
+        )
+        connection.send(json.dumps({'id': 1, 'method': 'Browser.close'}))
+        connection.close()
+    except Exception as exc:
+        print(f'关闭旧headless浏览器失败: {exc}')
+        return False
+    deadline = time.time() + 5
+    while time.time() < deadline:
+        if browser_metadata(port) is None:
+            return True
+        time.sleep(0.2)
+    return False
+
+
+def connect_to_browser(port):
+    """Connect to the exact CDP endpoint exposed by the running browser."""
+    import requests
+    from websocket import create_connection
+
+    address = f'127.0.0.1:{port}'
+    last_error = None
+    websocket_url = None
+    browser_is_headless = wants_headless_browser()
+    for _ in range(8):
+        try:
+            response = requests.get(
+                f'http://{address}/json/version',
+                headers={'Connection': 'close'},
+                timeout=2,
+            )
+            response.raise_for_status()
+            metadata = response.json()
+            candidate = metadata.get('webSocketDebuggerUrl')
+            if not isinstance(candidate, str) or not candidate.startswith(('ws://', 'wss://')):
+                raise RuntimeError('浏览器未返回有效的 webSocketDebuggerUrl')
+
+            probe = create_connection(
+                candidate,
+                timeout=3,
+                suppress_origin=True,
+            )
+            probe.close()
+            websocket_url = candidate
+            browser_is_headless = browser_is_headless or metadata_is_headless(metadata)
+            break
+        except Exception as exc:
+            last_error = exc
+            time.sleep(0.5)
+    if websocket_url is None:
+        raise RuntimeError(f'连接浏览器失败（端口 {port}）：{last_error}') from last_error
+    options = ChromiumOptions(read_file=False)
+    options.set_address(websocket_url).existing_only(True).new_env(False)
+    if browser_is_headless:
+        options.headless(True)
+    return Chromium(options)
 
 
 def remove_stale_browser_locks(data_dir):
@@ -136,7 +236,7 @@ def browser_start_timeout():
 
 def minimize_browser_window(tab):
     """尽量把门户启动的浏览器窗口最小化，避免干扰当前桌面。"""
-    if platform.system() != 'Windows':
+    if wants_headless_browser():
         return False
     for attempt in range(3):
         try:
@@ -158,6 +258,15 @@ def minimize_browser_window(tab):
     return False
 
 browser_running = check_browser_running(DEBUG_PORT)
+if browser_running and not wants_headless_browser():
+    metadata = browser_metadata(DEBUG_PORT)
+    if metadata and metadata_is_headless(metadata):
+        print('检测到旧headless浏览器，正在关闭并切换为可见模式...')
+        if not close_headless_browser(DEBUG_PORT):
+            raise RuntimeError(
+                f'无法关闭端口 {DEBUG_PORT} 上的旧headless浏览器，请先手动关闭该浏览器进程'
+            )
+        browser_running = False
 browser_started_by_script = False
 print(f"浏览器运行状态: {'已运行' if browser_running else '未运行'}")
 
@@ -176,9 +285,12 @@ if not browser_running:
         '--disable-features=TranslateUI,MediaRouter,OptimizationHints',
         '--no-first-run',
         '--no-default-browser-check',
-        '--start-minimized',
         '--window-size=1920,1080',
     ]
+    if platform.system() == 'Linux':
+        args.append('--profile-directory=Default')
+    if not wants_headless_browser():
+        args.append('--start-minimized')
     if platform.system() != 'Windows':
         args.extend(['--no-sandbox', '--disable-dev-shm-usage'])
     if platform.system() == 'Windows':
@@ -189,9 +301,10 @@ if not browser_running:
             '--disable-gpu-compositing',
         ])
     
-    if os.environ.get('RUST_PORTAL_HEADLESS') == '1' or (platform.system() == 'Linux' and not os.environ.get('DISPLAY')):
+    if wants_headless_browser():
         args.append('--headless=new')
         args.append('--disable-gpu')
+        args.append('--disable-software-rasterizer')
     
     print(f"启动命令: {' '.join(args)}")
     
@@ -252,7 +365,7 @@ if not browser_running:
 
 # ---------- 7. 连接到现有浏览器并新建标签页 ----------
 print(f"连接到浏览器 127.0.0.1:{DEBUG_PORT}...")
-browser = Chromium(f'127.0.0.1:{DEBUG_PORT}')
+browser = connect_to_browser(DEBUG_PORT)
 print("浏览器连接成功")
 
 tab = browser.new_tab()

@@ -55,14 +55,20 @@ struct TruenoInput {
     model: String,
     #[serde(default = "default_trueno_mode")]
     mode: String,
-    #[serde(default)]
-    roi: serde_json::Value,
+    #[serde(default = "default_trueno_inference_mode")]
+    inference_mode: String,
+    #[serde(default, alias = "roi")]
+    calibration: serde_json::Value,
     #[serde(default)]
     helpers: serde_json::Value,
 }
 
 fn default_trueno_mode() -> String {
     "auto".to_owned()
+}
+
+fn default_trueno_inference_mode() -> String {
+    "local".to_owned()
 }
 
 #[derive(Default, serde::Deserialize)]
@@ -192,18 +198,42 @@ fn model_actions(model: &str) -> Option<Vec<WorkspaceAction>> {
     })
 }
 
-fn model_name(model: &str) -> &'static str {
+fn generic_actions(
+    authority: &crate::authority::AuthorityConfig,
+    model: &str,
+) -> Option<Vec<WorkspaceAction>> {
+    let tab = authority.generic_tab(model)?;
+    Some(
+        tab.component_elements
+            .changes
+            .iter()
+            .map(|change| action(&change.id, &change.name, &change.description, "配置权限"))
+            .collect(),
+    )
+}
+
+fn model_actions_for(
+    authority: &crate::authority::AuthorityConfig,
+    model: &str,
+) -> Option<Vec<WorkspaceAction>> {
+    model_actions(model).or_else(|| generic_actions(authority, model))
+}
+
+fn model_name(authority: &crate::authority::AuthorityConfig, model: &str) -> String {
     match model {
-        "log" => "日志转换",
-        "annotation" => "标注任务",
-        "offline" => "离线包工具",
-        "weekly" => "周报主流程",
-        "trueno" => "模型推理",
-        _ => "未知模型",
+        "log" => "日志转换".to_owned(),
+        "annotation" => "标注任务".to_owned(),
+        "offline" => "离线包工具".to_owned(),
+        "weekly" => "周报主流程".to_owned(),
+        "trueno" => "模型推理".to_owned(),
+        _ => authority
+            .generic_tab(model)
+            .map(|tab| tab.name.clone())
+            .unwrap_or_else(|| "未知模型".to_owned()),
     }
 }
 
-fn workspace_models() -> Vec<WorkspaceModel> {
+fn workspace_models(state: &AppState) -> Vec<WorkspaceModel> {
     [
         ("log", "日志转换", "Rust 原生解析 TXT 日志并输出 XLSX。"),
         (
@@ -231,7 +261,40 @@ fn workspace_models() -> Vec<WorkspaceModel> {
         actions: model_actions(id).unwrap_or_default(),
         config_files: Vec::new(),
         log_visual_lines: 19,
+        generic: false,
+        imports: Vec::new(),
+        parameters: Vec::new(),
+        parameter_combinations: Vec::new(),
+        display_imported_folder: false,
+        latest_temporal_display_file: None,
     })
+    .chain(state.authority.generic_tabs().iter().filter_map(|tab| {
+        let root = state
+            .authority
+            .generic_model_root(&state.project_root, &tab.id)?;
+        let entry = safe_relative_path(&root, &tab.entry, "通用模型入口路径无效").ok()?;
+        if !root.is_dir() || !entry.is_file() {
+            return None;
+        }
+        Some(WorkspaceModel {
+            id: tab.id.clone(),
+            name: tab.name.clone(),
+            description: tab.description.clone(),
+            actions: generic_actions(state.authority.as_ref(), &tab.id).unwrap_or_default(),
+            config_files: Vec::new(),
+            log_visual_lines: if tab.log_display {
+                state.authority.log_visual_lines()
+            } else {
+                0
+            },
+            generic: true,
+            imports: tab.component_elements.imports.clone(),
+            parameters: tab.component_elements.parameters.clone(),
+            parameter_combinations: tab.parameter_combinations.clone(),
+            display_imported_folder: tab.display_imported_folder,
+            latest_temporal_display_file: tab.latest_temporal_display_file.clone(),
+        })
+    }))
     .collect()
 }
 
@@ -240,12 +303,20 @@ pub async fn catalog(State(state): State<AppState>, headers: HeaderMap) -> Respo
         Ok(user) => user,
         Err(response) => return response,
     };
-    let mut models = workspace_models();
+    let mut models = workspace_models(&state);
     models.retain(|model| state.authority.model_visible(&user.role, &model.id));
     for model in &mut models {
-        model.log_visual_lines = state.authority.log_visual_lines();
+        if !model.generic || model.log_visual_lines > 0 {
+            model.log_visual_lines = state.authority.log_visual_lines();
+        }
         for action in &mut model.actions {
-            let permission = crate::authority::AuthorityConfig::model_action(&model.id, &action.id);
+            let permission = if model.generic {
+                state
+                    .authority
+                    .generic_action_permission(&model.id, &action.id)
+            } else {
+                crate::authority::AuthorityConfig::model_action(&model.id, &action.id)
+            };
             action.allowed = state.authority.allows(&user.role, &permission);
         }
         if state.authority.allows(&user.role, "config.view") {
@@ -262,6 +333,12 @@ pub async fn catalog(State(state): State<AppState>, headers: HeaderMap) -> Respo
             actions: Vec::new(),
             config_files: Vec::new(),
             log_visual_lines: state.authority.log_visual_lines(),
+            generic: false,
+            imports: Vec::new(),
+            parameters: Vec::new(),
+            parameter_combinations: Vec::new(),
+            display_imported_folder: false,
+            latest_temporal_display_file: None,
         });
     }
     Json(models).into_response()
@@ -276,20 +353,29 @@ pub async fn start_job(
         Ok(user) => user,
         Err(response) => return response,
     };
-    let Some(actions) = model_actions(&request.model) else {
+    let Some(actions) = model_actions_for(state.authority.as_ref(), &request.model) else {
         return message(StatusCode::NOT_FOUND, false, "模型不存在");
     };
     let Some(selected) = actions.iter().find(|item| item.id == request.action) else {
         return message(StatusCode::BAD_REQUEST, false, "动作不存在");
     };
-    let permission =
-        crate::authority::AuthorityConfig::model_action(&request.model, &request.action);
+    let permission = if state.authority.generic_tab(&request.model).is_some() {
+        state
+            .authority
+            .generic_action_permission(&request.model, &request.action)
+    } else {
+        crate::authority::AuthorityConfig::model_action(&request.model, &request.action)
+    };
     if !state.authority.allows(&user.role, &permission) {
         return message(StatusCode::FORBIDDEN, false, "当前角色没有执行此动作的权限");
     }
 
     let job_id = state.next_id("job");
-    let label = format!("{} / {}", model_name(&request.model), selected.name);
+    let label = format!(
+        "{} / {}",
+        model_name(state.authority.as_ref(), &request.model),
+        selected.name
+    );
     let job = JobInfo {
         id: job_id.clone(),
         model: request.model.clone(),
@@ -313,6 +399,32 @@ pub async fn start_job(
     let worker_job_id = job_id.clone();
     let worker_user = user.clone();
     tokio::spawn(async move {
+        let job_model = request.model;
+        let job_action = request.action;
+        let job_input = request.input;
+        let history_permit = if job_model == "offline" && job_action == "mode2" {
+            match worker_state
+                .h_review_semaphore
+                .clone()
+                .acquire_owned()
+                .await
+            {
+                Ok(permit) => Some(permit),
+                Err(_) => {
+                    set_job_status(
+                        &worker_state,
+                        &worker_job_id,
+                        "failed",
+                        "H 模式审核并发锁已关闭",
+                        Some(1),
+                    );
+                    remove_job_control(&worker_state, &worker_job_id);
+                    return;
+                }
+            }
+        } else {
+            None
+        };
         let permit = match worker_state.job_semaphore.clone().acquire_owned().await {
             Ok(permit) => permit,
             Err(_) => {
@@ -327,10 +439,8 @@ pub async fn start_job(
                 return;
             }
         };
-        let job_model = request.model;
-        let job_action = request.action;
-        let job_input = request.input;
         let _ = tokio::task::spawn_blocking(move || {
+            let _history_permit = history_permit;
             let started_at = SystemTime::now();
             if job_cancel_requested(&worker_state, &worker_job_id) {
                 set_job_status(
@@ -953,6 +1063,7 @@ pub async fn local_import(
         path: relative,
         name: filename.clone(),
         display_name: filename,
+        kind: "file".to_owned(),
     })
     .into_response()
 }
@@ -970,6 +1081,9 @@ pub async fn upload(
     let Some(root) = model_root(&state, &query.model) else {
         return message(StatusCode::NOT_FOUND, false, "模型不存在");
     };
+    if state.authority.generic_tab(&query.model).is_some() {
+        return upload_generic(&state, &user, &query, root, multipart).await;
+    }
     if query.model == "annotation" || query.model == "auth" {
         return message(StatusCode::BAD_REQUEST, false, "该模块不需要上传文件");
     }
@@ -1101,6 +1215,188 @@ pub async fn upload(
             .and_then(|value| value.to_str())
             .unwrap_or(&safe_name)
             .to_owned(),
+        kind: "file".to_owned(),
+    })
+    .into_response()
+}
+
+async fn upload_generic(
+    state: &AppState,
+    user: &SessionUser,
+    query: &UploadQuery,
+    root: PathBuf,
+    mut multipart: Multipart,
+) -> Response {
+    let Some(tab) = state.authority.generic_tab(&query.model).cloned() else {
+        return message(StatusCode::NOT_FOUND, false, "通用模型配置不存在");
+    };
+    let Some(import) = tab
+        .component_elements
+        .imports
+        .iter()
+        .find(|item| item.id == query.slot)
+    else {
+        return message(StatusCode::BAD_REQUEST, false, "通用模型导入项不存在");
+    };
+    let kind = import.kind.trim().to_ascii_lowercase();
+    if !matches!(kind.as_str(), "file" | "folder") {
+        return message(StatusCode::BAD_REQUEST, false, "通用模型导入项类型无效");
+    }
+    let upload_id = safe_segment(&state.next_id("upload"));
+    let upload_root = root
+        .join("portal_inputs")
+        .join(user_key(user))
+        .join(upload_id);
+    if let Err(error) = tokio::fs::create_dir_all(&upload_root).await {
+        return message(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            false,
+            format!("创建通用模型导入目录失败：{error}"),
+        );
+    }
+
+    let mut uploaded_files = 0usize;
+    let mut first_relative = None;
+    let mut display_name = String::new();
+    loop {
+        let mut field = match multipart.next_field().await {
+            Ok(Some(field)) => field,
+            Ok(None) => break,
+            Err(error) => {
+                return message(
+                    StatusCode::BAD_REQUEST,
+                    false,
+                    format!("读取通用模型上传内容失败：{error}"),
+                );
+            }
+        };
+        let field_name = field.name().unwrap_or_default().to_owned();
+        if field_name == "slot" {
+            let _ = field.text().await;
+            continue;
+        }
+        if field_name != "file" {
+            continue;
+        }
+        if kind == "file" && uploaded_files > 0 {
+            return message(
+                StatusCode::BAD_REQUEST,
+                false,
+                "文件导入项一次只能上传一个文件",
+            );
+        }
+        let raw_name = field.file_name().unwrap_or("uploaded-file");
+        let relative_name = match safe_upload_relative_path(raw_name, kind == "folder") {
+            Ok(path) => path,
+            Err(error) => return message(StatusCode::BAD_REQUEST, false, error),
+        };
+        if relative_name.as_os_str().is_empty() {
+            return message(StatusCode::BAD_REQUEST, false, "上传文件名无效");
+        }
+        if !generic_accepts_filename(&import.accept, &relative_name) {
+            return message(
+                StatusCode::BAD_REQUEST,
+                false,
+                format!("导入文件类型不符合配置：{}", import.name),
+            );
+        }
+        if display_name.is_empty() {
+            display_name = if kind == "folder" {
+                relative_name
+                    .components()
+                    .next()
+                    .and_then(|component| component.as_os_str().to_str())
+                    .unwrap_or("uploaded-folder")
+                    .to_owned()
+            } else {
+                relative_name
+                    .file_name()
+                    .and_then(|value| value.to_str())
+                    .unwrap_or("uploaded-file")
+                    .to_owned()
+            };
+        }
+        let destination = upload_root.join(&relative_name);
+        if let Some(parent) = destination.parent() {
+            if let Err(error) = tokio::fs::create_dir_all(parent).await {
+                return message(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    false,
+                    format!("创建通用模型文件夹失败：{error}"),
+                );
+            }
+        }
+        let mut output = match tokio::fs::File::create(&destination).await {
+            Ok(file) => file,
+            Err(error) => {
+                return message(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    false,
+                    format!("创建通用模型上传文件失败：{error}"),
+                );
+            }
+        };
+        let mut size = 0usize;
+        loop {
+            let chunk = match field.chunk().await {
+                Ok(Some(chunk)) => chunk,
+                Ok(None) => break,
+                Err(error) => {
+                    let _ = tokio::fs::remove_dir_all(&upload_root).await;
+                    return message(
+                        StatusCode::BAD_REQUEST,
+                        false,
+                        format!("读取通用模型文件失败：{error}"),
+                    );
+                }
+            };
+            size = match size.checked_add(chunk.len()) {
+                Some(value) => value,
+                None => MAX_UPLOAD_BYTES + 1,
+            };
+            if size > MAX_UPLOAD_BYTES {
+                let _ = tokio::fs::remove_dir_all(&upload_root).await;
+                return message(StatusCode::PAYLOAD_TOO_LARGE, false, "文件不能超过 2 GB");
+            }
+            if let Err(error) = output.write_all(&chunk).await {
+                let _ = tokio::fs::remove_dir_all(&upload_root).await;
+                return message(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    false,
+                    format!("保存通用模型文件失败：{error}"),
+                );
+            }
+        }
+        if let Err(error) = output.flush().await {
+            let _ = tokio::fs::remove_dir_all(&upload_root).await;
+            return message(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                false,
+                format!("写入通用模型文件失败：{error}"),
+            );
+        }
+        if first_relative.is_none() {
+            first_relative = Some(relative_name);
+        }
+        uploaded_files += 1;
+    }
+    if uploaded_files == 0 {
+        let _ = tokio::fs::remove_dir_all(&upload_root).await;
+        return message(StatusCode::BAD_REQUEST, false, "请选择要导入的文件或文件夹");
+    }
+    let returned_path = if kind == "folder" {
+        relative_path(&root, &upload_root)
+    } else {
+        relative_path(
+            &root,
+            &upload_root.join(first_relative.as_ref().expect("first upload path")),
+        )
+    };
+    Json(UploadResponse {
+        path: returned_path,
+        name: display_name.clone(),
+        display_name,
+        kind,
     })
     .into_response()
 }
@@ -1124,10 +1420,13 @@ pub async fn download(
             "该文件不是当前用户本次处理产物",
         );
     }
-    let path = match safe_existing_path(&root, &query.path) {
+    let path = match resolve_user_file_path(&state, &user, &query.model, &query.path) {
         Ok(path) => path,
         Err(text) => return message(StatusCode::BAD_REQUEST, false, text),
     };
+    if path.is_dir() {
+        return message(StatusCode::BAD_REQUEST, false, "文件夹不能直接下载");
+    }
     let bytes = match tokio::fs::read(&path).await {
         Ok(bytes) => bytes,
         Err(error) => {
@@ -1167,7 +1466,7 @@ pub async fn content(
             "该文件不是当前用户本次处理产物",
         );
     }
-    let path = match safe_existing_path(&root, &query.path) {
+    let path = match resolve_user_file_path(&state, &user, &query.model, &query.path) {
         Ok(path) => path,
         Err(text) => return message(StatusCode::BAD_REQUEST, false, text),
     };
@@ -1224,7 +1523,7 @@ pub async fn open_file(
             "该文件不是当前用户本次处理产物",
         );
     }
-    let path = match safe_existing_path(&root, &request.path) {
+    let path = match resolve_user_file_path(&state, &user, &request.model, &request.path) {
         Ok(path) => path,
         Err(text) => return message(StatusCode::BAD_REQUEST, false, text),
     };
@@ -1456,8 +1755,143 @@ fn execute_action(
         ("weekly", "generate") => execute_weekly_generate(state, job_id, user, input),
         ("weekly", "todo") => execute_weekly_todo(state, job_id, user),
         ("trueno", "infer") => execute_trueno_infer(state, job_id, user, input),
+        _ if state.authority.generic_tab(model).is_some() => {
+            execute_generic_model(state, job_id, user, model, action, input)
+        }
         _ => Err("未实现的模型动作".to_owned()),
     }
+}
+
+fn execute_generic_model(
+    state: &AppState,
+    job_id: &str,
+    user: &SessionUser,
+    model: &str,
+    action: &str,
+    input: &str,
+) -> Result<i32, String> {
+    let tab = state
+        .authority
+        .generic_tab(model)
+        .cloned()
+        .ok_or("通用模型配置不存在")?;
+    let root = model_root(state, model).ok_or("通用模型目录不存在")?;
+    let entry = safe_relative_path(&root, &tab.entry, "通用模型入口路径无效")?;
+    if !entry.is_file() {
+        return Err(format!("通用模型入口不存在：{}", entry.display()));
+    }
+
+    let payload: serde_json::Value =
+        serde_json::from_str(input).map_err(|error| format!("通用模型参数无效：{error}"))?;
+    let object = payload
+        .as_object()
+        .ok_or_else(|| "通用模型参数必须是 JSON 对象".to_owned())?;
+    let uploads = object
+        .get("uploads")
+        .and_then(|value| value.as_object())
+        .cloned()
+        .unwrap_or_default();
+    for import in &tab.component_elements.imports {
+        if !import.required {
+            continue;
+        }
+        let value = uploads
+            .get(&import.id)
+            .and_then(|value| value.as_str())
+            .unwrap_or_default();
+        if value.trim().is_empty() {
+            return Err(format!("请先导入：{}", import.name));
+        }
+    }
+
+    let upload_root = root.join("portal_inputs").join(user_key(user));
+    let mut resolved_uploads = serde_json::Map::new();
+    for (id, value) in uploads {
+        let relative = value
+            .as_str()
+            .ok_or_else(|| format!("导入项 {id} 的路径无效"))?;
+        let path = safe_existing_path(&root, relative)?;
+        ensure_in_user_upload_dir(&path, &upload_root, "只能处理当前用户导入的文件")?;
+        resolved_uploads.insert(id, serde_json::Value::String(path_env(&path)));
+    }
+    let primary_input = resolved_uploads
+        .values()
+        .find_map(|value| value.as_str())
+        .map(str::to_owned);
+    let entry_action = state
+        .authority
+        .generic_action_name(model, action)
+        .unwrap_or_else(|| action.to_owned());
+
+    let output_dir = job_output_dir(&root, user, job_id, "portal_outputs");
+    fs::create_dir_all(&output_dir)
+        .map_err(|error| format!("创建通用模型输出目录失败：{error}"))?;
+    let temp_dir = job_output_dir(&root, user, job_id, ".portal_tmp");
+    fs::create_dir_all(&temp_dir).map_err(|error| format!("创建通用模型临时目录失败：{error}"))?;
+    let result_path = output_dir.join("portal_result.json");
+    let request_path = temp_dir.join("request.json");
+    let request = serde_json::json!({
+        "model": model,
+        "action": entry_action,
+        "parameters": object.get("parameters").cloned().unwrap_or_else(|| serde_json::json!({})),
+        "uploads": resolved_uploads,
+        "input_path": primary_input,
+        "output_dir": path_env(&output_dir),
+        "result_path": path_env(&result_path),
+        "project_root": path_env(&state.project_root),
+        "model_root": path_env(&root),
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "role": user.role,
+        },
+    });
+    fs::write(
+        &request_path,
+        serde_json::to_vec_pretty(&request).map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| format!("写入通用模型请求失败：{error}"))?;
+
+    append_job_log(
+        state,
+        job_id,
+        &format!("通用模型：{} / {}", tab.name, action),
+    );
+    let entry_script = relative_path(&root, &entry);
+    run_python_with_env(
+        state,
+        job_id,
+        &root,
+        &entry_script,
+        &["--request-file".to_owned(), path_env(&request_path)],
+        &[],
+    )?;
+
+    let mut result = if result_path.is_file() {
+        let content = fs::read_to_string(&result_path)
+            .map_err(|error| format!("读取通用模型结果失败：{error}"))?;
+        serde_json::from_str::<serde_json::Value>(&content)
+            .map_err(|error| format!("解析通用模型结果失败：{error}"))?
+    } else {
+        serde_json::json!({"status": "completed"})
+    };
+    if let Some(result_object) = result.as_object_mut() {
+        result_object.insert(
+            "input_path".to_owned(),
+            primary_input
+                .map(|path| serde_json::Value::String(relative_path(&root, Path::new(&path))))
+                .unwrap_or(serde_json::Value::Null),
+        );
+        result_object.insert(
+            "output_dir".to_owned(),
+            serde_json::Value::String(relative_path(&root, &output_dir)),
+        );
+    }
+    if let Some(summary) = result.get("summary").and_then(|value| value.as_str()) {
+        append_job_log(state, job_id, summary);
+    }
+    set_job_result(state, job_id, result);
+    Ok(0)
 }
 
 fn execute_trueno_infer(
@@ -1474,6 +1908,10 @@ fn execute_trueno_infer(
     let mode = request.mode.trim().to_ascii_lowercase();
     if !matches!(mode.as_str(), "auto" | "local" | "import") {
         return Err("模型调用模式无效".to_owned());
+    }
+    let inference_mode = request.inference_mode.trim().to_ascii_lowercase();
+    if !matches!(inference_mode.as_str(), "local" | "src") {
+        return Err("推理链路无效".to_owned());
     }
     let root = model_root(state, "trueno").ok_or("Trueno 模型目录不存在")?;
     let image = safe_existing_path(&root, &request.image)?;
@@ -1526,6 +1964,8 @@ fn execute_trueno_infer(
         request.ability.clone(),
         "--mode".to_owned(),
         mode,
+        "--inference-mode".to_owned(),
+        inference_mode,
         "--import-dir".to_owned(),
         path_env(&root.join("sources").join("temp").join(user_key(user))),
         "--output".to_owned(),
@@ -1536,10 +1976,10 @@ fn execute_trueno_infer(
     if !request.model.trim().is_empty() {
         args.extend(["--model".to_owned(), request.model]);
     }
-    if !request.roi.is_null() {
+    if !request.calibration.is_null() {
         args.extend([
-            "--roi".to_owned(),
-            serde_json::to_string(&request.roi).map_err(|error| error.to_string())?,
+            "--calibration".to_owned(),
+            serde_json::to_string(&request.calibration).map_err(|error| error.to_string())?,
         ]);
     }
     if !request.helpers.is_null() {
@@ -1705,7 +2145,14 @@ fn execute_annotation(
     let root = model_root(state, "annotation").ok_or("标注模型目录不存在")?;
     let work_dir = annotation_work_dir(&root, user);
     seed_annotation_work_dir(&root, &work_dir)?;
-    let profile_dir = root.join("chromium_user_data").join(user_key(user));
+    let profile_dir = if cfg!(target_os = "linux") {
+        linux_chromium_profile_dir(&root)
+    } else {
+        state
+            .authority
+            .browser_user_data_dir(&state.project_root, "annotation")
+            .unwrap_or_else(|| root.join("chromium_user_data").join(user_key(user)))
+    };
     run_python_with_env(
         state,
         job_id,
@@ -1801,9 +2248,11 @@ fn execute_offline(
             "--package".to_owned(),
             path_env(&job_package),
             "--interaction-mode".to_owned(),
-            "local".to_owned(),
+            "lan".to_owned(),
             "--host".to_owned(),
-            "127.0.0.1".to_owned(),
+            "0.0.0.0".to_owned(),
+            "--port".to_owned(),
+            "8000".to_owned(),
         ]);
     }
     if mode == "y" {
@@ -1821,7 +2270,14 @@ fn execute_weekly_refresh(
     let data_dir = weekly_data_dir(&root, user);
     fs::create_dir_all(&data_dir).map_err(|error| format!("创建周报数据目录失败：{error}"))?;
     seed_weekly_data_dir(&root, &data_dir)?;
-    let profile_dir = root.join("date_review/chrome/Data").join(user_key(user));
+    let profile_dir = if cfg!(target_os = "linux") {
+        linux_chromium_profile_dir(&root)
+    } else {
+        state
+            .authority
+            .browser_user_data_dir(&state.project_root, "weekly")
+            .unwrap_or_else(|| root.join("date_review/chrome/Data").join(user_key(user)))
+    };
     let first = run_python_with_env(
         state,
         job_id,
@@ -1969,7 +2425,7 @@ fn run_python_with_env(
         return Err(JOB_CANCELLED_MESSAGE.to_owned());
     }
     let python = python_for(model_root);
-    let temp_dir = model_root.join(".portal_tmp");
+    let temp_dir = runtime_temp_dir(model_root, job_id);
     fs::create_dir_all(&temp_dir).map_err(|error| format!("创建临时目录失败：{error}"))?;
     let headless = portal_headless();
     let mut command = Command::new(&python);
@@ -1992,6 +2448,13 @@ fn run_python_with_env(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     apply_python_runtime_env(&mut command, model_root);
+    #[cfg(target_os = "linux")]
+    if let Some(home) = std::env::var_os("HOME") {
+        command.env(
+            "RUST_PORTAL_CHROMIUM_SOURCE_DIR",
+            PathBuf::from(home).join(".config/chromium"),
+        );
+    }
     if let Some(chrome_path) = chrome_for(state, model_root)? {
         command.env("RUST_PORTAL_CHROME_PATH", chrome_path);
     }
@@ -2073,6 +2536,7 @@ fn run_trueno_bridge(
         .env("PYTHONUNBUFFERED", "1")
         .env("PYTHONUTF8", "1")
         .env("PYTHONIOENCODING", "utf-8")
+        .env("RUST_PORTAL_TRUENO_ROOT", path_env(model_root))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -2243,7 +2707,7 @@ fn remove_job_control(state: &AppState, id: &str) {
 fn terminate_process(process_id: u32) -> Result<(), String> {
     let process_id = process_id.to_string();
     let status = Command::new("taskkill")
-        .args(["/PID", process_id.as_str(), "/F"])
+        .args(["/PID", process_id.as_str(), "/T", "/F"])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -2281,12 +2745,9 @@ fn append_job_log(state: &AppState, id: &str, text: &str) {
     let max_visual_lines = state.authority.log_visual_lines();
     let mut jobs = state.jobs.lock().unwrap();
     if let Some(job) = jobs.get_mut(id) {
-        if let Some(url) = extract_local_url(text) {
-            if job.opened_url.is_none() {
-                job.opened_url = Some(url.clone());
-                thread::spawn(move || {
-                    let _ = open_with_default_app(Path::new(&url));
-                });
+        if let Some(url) = extract_review_url(text) {
+            if job.opened_url.is_none() || job.opened_url.as_deref().is_some_and(is_loopback_url) {
+                job.opened_url = Some(url);
             }
         }
         append_log_text(
@@ -2318,25 +2779,50 @@ fn retain_latest_log_lines(log: &mut String, max_lines: usize) {
     *log = lines.drain(first_kept..).collect::<Vec<_>>().join("\n");
 }
 
-fn extract_local_url(text: &str) -> Option<String> {
-    let start = text.find("http://127.0.0.1:")?;
-    let tail = &text[start..];
-    let end = tail
-        .find(|character: char| character.is_whitespace())
-        .unwrap_or(tail.len());
-    Some(tail[..end].trim_end_matches(['.', ',', ')']).to_owned())
+fn extract_review_url(text: &str) -> Option<String> {
+    let candidates = text.split_whitespace().filter_map(|part| {
+        let start = part.find("http://")?;
+        let url = part[start..].trim_end_matches(['.', ',', ')', ']', ';']);
+        let authority = url.split_once("://")?.1;
+        let host_port = authority.split('/').next()?;
+        let (host, port) = host_port.rsplit_once(':')?;
+        if host.is_empty() || port.parse::<u16>().is_err() {
+            return None;
+        }
+        Some(url.to_owned())
+    });
+    let candidates = candidates.collect::<Vec<_>>();
+    candidates
+        .iter()
+        .find(|url| !is_loopback_url(url))
+        .cloned()
+        .or_else(|| candidates.into_iter().next())
+}
+
+fn is_loopback_url(url: &str) -> bool {
+    let Some(authority) = url.split_once("://").map(|(_, rest)| rest) else {
+        return false;
+    };
+    let host = authority.split(['/', ':']).next().unwrap_or_default();
+    host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1"
 }
 
 fn model_root(state: &AppState, model: &str) -> Option<PathBuf> {
     let folder = match model {
-        "log" => "Log_Review-tag-0.0.1+python",
-        "annotation" => "Model-Annotation-tag-0.1.1+python",
-        "offline" => "Offline_Package_Organization-tag-0.0.12+python",
-        "weekly" => "Weekly-Report-Print-tag-0.0.8+python",
-        "trueno" => "trueno3_src-master-0.0.10",
-        _ => return None,
+        "log" => Some("Log_Review-tag-0.0.1+python".to_owned()),
+        "annotation" => Some("Model-Annotation-tag-0.1.1+python".to_owned()),
+        "offline" => Some("Offline_Package_Organization-tag-0.0.12+python".to_owned()),
+        "weekly" => Some("Weekly-Report-Print-tag-0.0.8+python".to_owned()),
+        "trueno" => Some("trueno3_src-master-0.0.10".to_owned()),
+        _ => None,
     };
-    Some(state.project_root.join("model").join(folder))
+    folder
+        .map(|folder| state.project_root.join("model").join(folder))
+        .or_else(|| {
+            state
+                .authority
+                .generic_model_root(&state.project_root, model)
+        })
 }
 
 fn model_id_for_root(root: &Path) -> Option<&'static str> {
@@ -2376,7 +2862,7 @@ fn python_for(root: &Path) -> PathBuf {
         ]
     };
     for candidate in candidates {
-        if candidate.is_file() {
+        if is_usable_python(&candidate) {
             return candidate;
         }
     }
@@ -2385,6 +2871,56 @@ fn python_for(root: &Path) -> PathBuf {
     } else {
         PathBuf::from("python3")
     }
+}
+
+fn is_executable_file(path: &Path) -> bool {
+    let Ok(metadata) = fs::metadata(path) else {
+        return false;
+    };
+    if !metadata.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
+fn is_usable_python(path: &Path) -> bool {
+    if !is_executable_file(path) {
+        return false;
+    }
+    Command::new(path)
+        .args(["-I", "-c", "import encodings"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+fn runtime_temp_dir(model_root: &Path, job_id: &str) -> PathBuf {
+    if cfg!(windows) {
+        return model_root.join(".portal_tmp");
+    }
+
+    let short_id: String = job_id
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric() || *character == '-')
+        .take(32)
+        .collect();
+    let short_id = if short_id.is_empty() {
+        "job"
+    } else {
+        short_id.as_str()
+    };
+    std::env::temp_dir().join("algorithm-web").join(short_id)
 }
 
 fn apply_python_runtime_env(command: &mut Command, root: &Path) {
@@ -2408,11 +2944,30 @@ fn portal_headless() -> bool {
     {
         Some("1" | "true" | "yes" | "on") => true,
         Some("0" | "false" | "no" | "off") => false,
-        _ => !cfg!(target_os = "windows"),
+        _ => {
+            if cfg!(target_os = "windows") || cfg!(target_os = "macos") {
+                false
+            } else {
+                std::env::var_os("DISPLAY").is_none()
+                    && std::env::var_os("WAYLAND_DISPLAY").is_none()
+            }
+        }
     }
 }
 
 fn chrome_for(state: &AppState, root: &Path) -> Result<Option<PathBuf>, String> {
+    // Linux uses the system Chromium so its proxy/network configuration is
+    // independent from the bundled Windows browser path.
+    if !cfg!(windows) {
+        return Ok([
+            PathBuf::from("/usr/lib/chromium/chromium"),
+            PathBuf::from("/usr/bin/chromium"),
+            PathBuf::from("/usr/bin/google-chrome-stable"),
+            PathBuf::from("/usr/bin/google-chrome"),
+        ]
+        .into_iter()
+        .find(|path| is_executable_file(path)));
+    }
     if let Some(model) = model_id_for_root(root) {
         if let Some(path) = state.authority.browser_path(&state.project_root, model) {
             if path.is_file() {
@@ -2432,6 +2987,10 @@ fn chrome_for(state: &AppState, root: &Path) -> Result<Option<PathBuf>, String> 
     ]
     .into_iter()
     .find(|path| path.is_file()))
+}
+
+fn linux_chromium_profile_dir(root: &Path) -> PathBuf {
+    root.join(".chromium_profile_linux")
 }
 
 fn parse_action_input(input: &str) -> ActionInput {
@@ -2803,7 +3362,7 @@ fn collect_generated_outputs(
             vec![job_output_dir(root, user, job_id, "date_review/portal_work").join("todo")]
         }
         ("trueno", "infer") => vec![job_output_dir(root, user, job_id, "portal_outputs")],
-        _ => Vec::new(),
+        _ => vec![job_output_dir(root, user, job_id, "portal_outputs")],
     };
     let cutoff = started_at
         .checked_sub(Duration::from_secs(2))
@@ -2812,7 +3371,21 @@ fn collect_generated_outputs(
     for candidate in roots {
         collect_recent_files_recursive(root, &candidate, 8, cutoff, &mut files);
     }
+    if model != "log"
+        && model != "annotation"
+        && model != "offline"
+        && model != "weekly"
+        && model != "trueno"
+    {
+        let output_dir = job_output_dir(root, user, job_id, "portal_outputs");
+        if let Ok(metadata) = fs::metadata(&output_dir) {
+            if let Some(info) = file_info(root, &output_dir, &metadata) {
+                files.push(info);
+            }
+        }
+    }
     files.retain(|file| !(model == "annotation" && is_annotation_seed_file(&file.name)));
+    files.retain(|file| file.name != "portal_result.json");
     files.sort_by(|left, right| {
         modified_sort_key(right)
             .cmp(&modified_sort_key(left))
@@ -2828,15 +3401,27 @@ fn visible_generated_files(
     model: &str,
     root: &Path,
 ) -> Vec<FileInfo> {
-    let mut files = state
+    let jobs = state
         .jobs
         .lock()
         .unwrap()
         .values()
         .filter(|job| job.owner_id == user.id && job.model == model)
+        .cloned()
+        .collect::<Vec<_>>();
+    let mut files = jobs
+        .iter()
         .flat_map(|job| job.generated_files.iter().cloned())
         .filter(|file| visible_in_file_list(state.authority.as_ref(), model, &file.path))
-        .filter(|file| root.join(Path::new(&file.path)).is_file())
+        .filter(|file| {
+            if let Some(relative) = file.path.strip_prefix("@project/") {
+                state.project_root.join(Path::new(relative)).is_file()
+                    || state.project_root.join(Path::new(relative)).is_dir()
+            } else {
+                root.join(Path::new(&file.path)).is_file()
+                    || root.join(Path::new(&file.path)).is_dir()
+            }
+        })
         .collect::<Vec<_>>();
     if model == "weekly" {
         let data_dir = weekly_data_dir(root, user);
@@ -2853,6 +3438,33 @@ fn visible_generated_files(
             }
         }
     }
+    if let Some(tab) = state.authority.generic_tab(model) {
+        if tab.display_imported_folder {
+            for job in &jobs {
+                let Some(path) = job
+                    .result
+                    .as_ref()
+                    .and_then(|result| result.get("input_path"))
+                    .and_then(|value| value.as_str())
+                else {
+                    continue;
+                };
+                if let Ok(input) = safe_existing_path(root, path) {
+                    collect_task_tree(root, &input, 8, &mut files);
+                }
+            }
+        }
+        for path in state
+            .authority
+            .generic_latest_project_paths(&state.project_root, model)
+        {
+            if let Ok(metadata) = fs::metadata(&path) {
+                if let Some(info) = project_file_info(&state.project_root, &path, &metadata) {
+                    files.push(info);
+                }
+            }
+        }
+    }
     files.sort_by(|left, right| {
         modified_sort_key(right)
             .cmp(&modified_sort_key(left))
@@ -2861,6 +3473,43 @@ fn visible_generated_files(
     files.dedup_by(|left, right| left.path == right.path);
     files.truncate(5);
     files
+}
+
+fn collect_task_tree(root: &Path, candidate: &Path, depth: usize, output: &mut Vec<FileInfo>) {
+    if is_ignored_path(candidate) || !candidate.exists() {
+        return;
+    }
+    let Ok(metadata) = fs::metadata(candidate) else {
+        return;
+    };
+    if let Some(info) = file_info(root, candidate, &metadata) {
+        output.push(info);
+    }
+    if !metadata.is_dir() || depth == 0 {
+        return;
+    }
+    let Ok(entries) = fs::read_dir(candidate) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        collect_task_tree(root, &entry.path(), depth - 1, output);
+    }
+}
+
+fn project_file_info(root: &Path, path: &Path, metadata: &fs::Metadata) -> Option<FileInfo> {
+    let name = path.file_name()?.to_string_lossy().to_string();
+    Some(FileInfo {
+        path: format!("@project/{}", relative_project_path(root, path)),
+        display_name: name.clone(),
+        name,
+        kind: if metadata.is_dir() {
+            "directory".to_owned()
+        } else {
+            "file".to_owned()
+        },
+        size: metadata.len(),
+        modified: metadata.modified().ok().and_then(format_time),
+    })
 }
 
 fn resolved_file_description_roots(state: &AppState) -> Vec<ResolvedFileDescriptionRoot> {
@@ -3251,15 +3900,78 @@ fn user_generated_file_allowed(
     requested: &str,
 ) -> bool {
     let requested = requested.replace('\\', "/");
-    state
+    let jobs = state
         .jobs
         .lock()
         .unwrap()
         .values()
         .filter(|job| job.owner_id == user.id && job.model == model)
+        .cloned()
+        .collect::<Vec<_>>();
+    if jobs
+        .iter()
         .flat_map(|job| job.generated_files.iter())
-        .any(|file| file.path == requested && root.join(Path::new(&file.path)).is_file())
-        || current_weekly_data_file_allowed(state.authority.as_ref(), user, model, root, &requested)
+        .any(|file| {
+            file.path == requested
+                && (root.join(Path::new(&file.path)).is_file()
+                    || root.join(Path::new(&file.path)).is_dir())
+        })
+    {
+        return true;
+    }
+    if current_weekly_data_file_allowed(state.authority.as_ref(), user, model, root, &requested) {
+        return true;
+    }
+    if let Some(tab) = state.authority.generic_tab(model) {
+        if tab.display_imported_folder
+            && jobs.iter().any(|job| {
+                let Some(input_path) = job
+                    .result
+                    .as_ref()
+                    .and_then(|result| result.get("input_path"))
+                    .and_then(|value| value.as_str())
+                else {
+                    return false;
+                };
+                let Ok(input) = safe_existing_path(root, input_path) else {
+                    return false;
+                };
+                let Ok(candidate) = safe_existing_path(root, &requested) else {
+                    return false;
+                };
+                candidate.starts_with(input)
+            })
+        {
+            return true;
+        }
+        if let Some(relative) = requested.strip_prefix("@project/") {
+            let Ok(candidate) = safe_project_existing_path(&state.project_root, relative) else {
+                return false;
+            };
+            return state
+                .authority
+                .generic_latest_project_paths(&state.project_root, model)
+                .into_iter()
+                .any(|path| path == candidate);
+        }
+    }
+    false
+}
+
+fn resolve_user_file_path(
+    state: &AppState,
+    _user: &SessionUser,
+    model: &str,
+    requested: &str,
+) -> Result<PathBuf, String> {
+    if let Some(relative) = requested.trim().strip_prefix("@project/") {
+        if state.authority.generic_tab(model).is_none() {
+            return Err("项目文件路径不适用于当前模型".to_owned());
+        }
+        return safe_project_existing_path(&state.project_root, relative);
+    }
+    let root = model_root(state, model).ok_or_else(|| "模型不存在".to_owned())?;
+    safe_existing_path(&root, requested)
 }
 
 fn visible_in_file_list(
@@ -3267,6 +3979,12 @@ fn visible_in_file_list(
     model: &str,
     path: &str,
 ) -> bool {
+    if authority.generic_tab(model).is_some()
+        && Path::new(path).file_name().and_then(|value| value.to_str())
+            == Some("portal_result.json")
+    {
+        return false;
+    }
     if let Some(names) = authority.visible_file_names(model) {
         let filename = Path::new(path)
             .file_name()
@@ -3382,6 +4100,11 @@ fn file_info(root: &Path, path: &Path, metadata: &fs::Metadata) -> Option<FileIn
         path: relative_path(root, path),
         display_name: name.clone(),
         name,
+        kind: if metadata.is_dir() {
+            "directory".to_owned()
+        } else {
+            "file".to_owned()
+        },
         size: metadata.len(),
         modified: metadata.modified().ok().and_then(format_time),
     })
@@ -3440,6 +4163,63 @@ fn safe_filename(value: &str) -> String {
     } else {
         cleaned
     }
+}
+
+fn safe_upload_relative_path(value: &str, preserve_directories: bool) -> Result<PathBuf, String> {
+    let normalized = value.trim().replace('\\', "/");
+    let raw = Path::new(&normalized);
+    if normalized.is_empty()
+        || raw.is_absolute()
+        || raw.components().any(|component| {
+            matches!(
+                component,
+                Component::ParentDir | Component::RootDir | Component::Prefix(_)
+            )
+        })
+    {
+        return Err("上传文件路径不合法".to_owned());
+    }
+    let mut parts = Vec::new();
+    for component in raw.components() {
+        let Component::Normal(value) = component else {
+            return Err("上传文件路径不合法".to_owned());
+        };
+        let name = value.to_string_lossy();
+        if name.is_empty() || name.chars().any(|character| character.is_control()) {
+            return Err("上传文件名不合法".to_owned());
+        }
+        parts.push(name.to_string());
+    }
+    if !preserve_directories && parts.len() > 1 {
+        return Ok(PathBuf::from(parts.pop().unwrap_or_default()));
+    }
+    Ok(parts.into_iter().collect())
+}
+
+fn generic_accepts_filename(accept: &str, path: &Path) -> bool {
+    let accept = accept.trim();
+    if accept.is_empty() || accept == "*" {
+        return true;
+    }
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    accept
+        .split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .any(|item| {
+            let item = item.to_ascii_lowercase();
+            if item == "*" || item == "*/*" {
+                return true;
+            }
+            if let Some(suffix) = item.strip_prefix("*.") {
+                return extension == suffix;
+            }
+            item.trim_start_matches('.') == extension
+        })
 }
 
 fn find_input_file(root: &Path, input: &str, extensions: &[&str]) -> Result<PathBuf, String> {
@@ -3905,5 +4685,19 @@ mod tests {
         assert_eq!(lines.len(), 2 * JOB_LOG_MAX_PAGES);
         assert_eq!(lines.first(), Some(&"line-3"));
         assert_eq!(lines.last(), Some(&"line-20"));
+    }
+
+    #[test]
+    fn review_url_prefers_lan_address_over_loopback() {
+        let url = extract_review_url(
+            "m 模式 Web: http://127.0.0.1:8000/ 局域网访问: http://192.168.1.20:8000/",
+        );
+        assert_eq!(url.as_deref(), Some("http://192.168.1.20:8000/"));
+    }
+
+    #[test]
+    fn review_url_accepts_loopback_when_no_lan_address_exists() {
+        let url = extract_review_url("m 模式 Web: http://127.0.0.1:8000/");
+        assert_eq!(url.as_deref(), Some("http://127.0.0.1:8000/"));
     }
 }

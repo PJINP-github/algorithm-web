@@ -2,20 +2,32 @@
 
 功能：
     读取 ``storage/model_descriptor.yaml``，解析能力和流水线配置，
-    在 ``model/`` 中查找本地权重，并通过 Ultralytics 执行 CPU 或 CUDA
-    推理。引擎还复现了项目中最常用的 ROI 裁剪、检测框中心点筛选、
-    类别筛选、类别置信度筛选以及多阶段裁剪推理行为。
+    在 ``model/`` 中查找本地权重，并执行多段推理。
 
 设计说明：
-    服务器版本依赖 ``storage/params``、硬件专用基类和编译授权文件， 
-    这些条件不适合本机开发。因此本模块保持描述文件的数据契约，
-    将模型加载和检测结果转换实现为一个独立的本地适配层。
+    推理存在两条等价路径，二者都以描述文件为唯一入口：
+
+    1. ``src 调用链``（默认）：完全复用服务器的调用约定，由
+       ``src/base/<base>_nv`` 的 ``create_base_core_object`` 构建模型对象，
+       再把 ``src/algorithm/<patch>`` 中的 ``patch_*`` 函数绑定为
+       ``infer``，按 ``pipeline_idx`` 依次调用。阶段之间原样透传
+       ``prv_image``、``prv_result`` 和 ``prv_config``，因此像
+       ``meter_p2`` 依赖 ``prv_config['p1_box']`` 这类跨阶段状态、
+       以及 ``pre_process: [crop_by_roi]`` 的内部兼容处理都由原脚本完成。
+    2. ``本地执行器``（回退）：上一节所述脚本在本地不可加载时，使用本模块
+       内置的 YOLO/CRNN/PaddleOCR 适配器执行同一份流水线配置。
+
+    服务器版本还依赖 ``core.magic`` 编译授权、``storage/params`` 权重目录
+    和硬件专用基类，这些不适合本机开发；本模块因此不加载 ``core.loader``，
+    而是复刻其按描述文件装载 base 与 patch 的最小逻辑。
 """
 
 from __future__ import annotations
 
 import base64
 import copy
+import importlib
+import json
 import logging
 import math
 import os
@@ -27,12 +39,25 @@ from collections import Counter, deque
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from types import MethodType
 from typing import Any, Iterable
 
 
 # 模块级 src 日志单例缓存，避免重复创建 WeeklyLogger 时添加重复 handler。
 _SRC_LOGGER_LOCK = threading.Lock()
 _SRC_LOGGERS: dict[tuple[str, str], logging.Logger] = {}
+
+# 模块级 src 导入路径状态。``src/base`` 与 ``src/algorithm`` 顶层包名不带
+# 前缀（如 ``base_yolo_nv``、``light_pgzsd``），因此必须把这两个目录加入
+# ``sys.path``，与 ``src/core/loader.py`` 的服务端做法保持一致。
+_SRC_PATH_LOCK = threading.Lock()
+_SRC_PATHS: set[str] = set()
+
+
+def _normalise_path(value: str | Path) -> Path:
+    """Accept YAML/CLI paths written with either Windows or POSIX separators."""
+    expanded = os.path.expandvars(os.path.expanduser(str(value).strip()))
+    return Path(expanded.replace("\\", "/"))
 
 
 class LocalInferenceError(RuntimeError):
@@ -45,6 +70,14 @@ class LocalDependencyError(LocalInferenceError):
 
 class ModelResolutionError(LocalInferenceError):
     """无法从本地模型目录解析权重时抛出的错误。"""
+
+
+class SourceChainError(LocalInferenceError):
+    """``src`` 调用链无法加载或执行时抛出的错误。
+
+    这类错误在推理时会被捕获并回退到内置本地执行器，因此表示的是
+    “原项目脚本在本机不可用”，而不是请求本身非法。
+    """
 
 
 @dataclass(frozen=True)
@@ -79,6 +112,14 @@ class LocalInferenceEngine:
     }
     CRNN_BASE_NAMES = {"base_crnn", "base_crnn_nv", "base_crnn_om"}
     PPOCR_BASE_NAMES = {"base_ppocr", "base_ppocr_nv", "base_ppocr_om"}
+    # 描述文件里的 base 是设备无关名（base_yolo / base_ppocr），
+    # 需要按权重格式映射到 src/base 下的硬件专用实现。
+    SOURCE_BASE_SUFFIXES = {
+        ".pt": "_nv",
+        ".onnx": "_nv",
+        ".om": "_om",
+        ".rknn": "_rknn",
+    }
 
     def __init__(
         self,
@@ -99,14 +140,27 @@ class LocalInferenceEngine:
             device: ``auto``、``cpu`` 或形如 ``cuda:0`` 的设备名。
             log_capacity: 内存中保留的最近日志数量。
         """
-        self.root_dir = Path(root_dir or Path(__file__).resolve().parents[1]).resolve()
-        self.descriptor_path = Path(
-            descriptor_path or self.root_dir / "storage" / "model_descriptor.yaml"
+        self.root_dir = _normalise_path(
+            root_dir or Path(__file__).resolve().parents[1]
         ).resolve()
-        self.model_dir = Path(model_dir or self.root_dir / "model").resolve()
+        descriptor_value = _normalise_path(
+            descriptor_path or self.root_dir / "storage" / "model_descriptor.yaml"
+        )
+        self.descriptor_path = (
+            (self.root_dir / descriptor_value) if not descriptor_value.is_absolute() else descriptor_value
+        ).resolve()
+        model_value = _normalise_path(model_dir or self.root_dir / "model")
+        self.model_dir = (
+            (self.root_dir / model_value) if not model_value.is_absolute() else model_value
+        ).resolve()
         self.additional_model_dirs = []
         for directory in additional_model_dirs or []:
-            resolved = Path(directory).resolve()
+            directory_value = _normalise_path(directory)
+            resolved = (
+                (self.root_dir / directory_value)
+                if not directory_value.is_absolute()
+                else directory_value
+            ).resolve()
             if resolved != self.model_dir and resolved not in self.additional_model_dirs:
                 self.additional_model_dirs.append(resolved)
         self.requested_device = device
@@ -123,6 +177,11 @@ class LocalInferenceEngine:
         self._runtime_error = ""
         self._image_runtime_error = ""
         self._cn_font_cache: str | None = None
+        # src 调用链缓存：执行器实例、模块、以及本机是否可用的判定结果。
+        self._src_executors: dict[tuple[str, str, str], Any] = {}
+        self._src_modules: dict[str, Any] = {}
+        self._src_result_types: tuple[type, Any, Any] | None = None
+        self._src_ability_cache: dict[str, bool] = {}
         self._descriptor = self._load_descriptor()
         self._abilities = self._descriptor.get("abilities", {})
         self.device = self._select_device(device)
@@ -344,6 +403,134 @@ class LocalInferenceEngine:
         if x2 - x1 < 2 or y2 - y1 < 2:
             raise LocalInferenceError("辅助框区域太小，至少需要 2 x 2 像素。")
         return [x1, y1, x2, y2]
+
+    @staticmethod
+    def _normalise_polygon(value: Any, width: int, height: int) -> list[list[int]]:
+        """规范化一个标定多边形，至少需要 4 个顶点。
+
+        支持原项目 ``on_intersection_output`` 的写法：既接受
+        ``{'points': [x1, y1, x2, y2, ...]}`` 的扁平坐标，也接受
+        ``[[x, y], [x, y], ...]`` 的顶点列表。
+        """
+        points = value.get("points") if isinstance(value, dict) else value
+        if not isinstance(points, (list, tuple)) or not points:
+            raise LocalInferenceError("标定框必须是非空的点数组。")
+        if not isinstance(points[0], (list, tuple)):
+            if len(points) % 2 != 0:
+                raise LocalInferenceError("标定框坐标个数必须成对。")
+            points = [
+                [points[index], points[index + 1]]
+                for index in range(0, len(points), 2)
+            ]
+        result: list[list[int]] = []
+        for point in points:
+            if not isinstance(point, (list, tuple)) or len(point) < 2:
+                raise LocalInferenceError("标定框顶点必须是 [x, y]。")
+            try:
+                x = max(0, min(width, int(round(float(point[0])))))
+                y = max(0, min(height, int(round(float(point[1])))))
+            except (TypeError, ValueError) as exc:
+                raise LocalInferenceError("标定框坐标必须是数字。") from exc
+            result.append([x, y])
+        if len(result) < 4:
+            raise LocalInferenceError("标定框至少需要 4 个顶点。")
+        return result
+
+    def _normalise_calibration_polygons(
+        self, value: Any, width: int, height: int
+    ) -> list[list[list[int]]]:
+        """把网页提交的标定框规范化成多边形列表。
+
+        支持原项目 ``on_intersection_output`` 的坐标写法：
+        ``{'points': [x1, y1, ...]}``、``[[x, y], ...]`` 顶点列表，
+        以及兼容历史矩形 ``[x1, y1, x2, y2]``（展开为四点多边形）。
+        单个无效标注会被跳过，不影响其余多边形。
+        """
+        if value in (None, ""):
+            return []
+        if isinstance(value, dict):
+            value = [value]
+        if not isinstance(value, list) or not value:
+            return []
+        first = value[0]
+        if not isinstance(first, (list, tuple, dict)) and len(value) == 4:
+            x1, y1, x2, y2 = [int(round(float(item))) for item in value]
+            value = [
+                [min(x1, x2), min(y1, y2)],
+                [max(x1, x2), min(y1, y2)],
+                [max(x1, x2), max(y1, y2)],
+                [min(x1, x2), max(y1, y2)],
+            ]
+        multiple = isinstance(first, dict) or (
+            isinstance(first, (list, tuple))
+            and bool(first)
+            and isinstance(first[0], (list, tuple))
+        )
+        candidates = value if multiple else [value]
+        polygons: list[list[list[int]]] = []
+        for item in candidates:
+            try:
+                polygon = self._normalise_polygon(item, width, height)
+            except LocalInferenceError:
+                continue
+            if len(polygon) >= 4:
+                polygons.append(polygon)
+        return polygons
+
+    @staticmethod
+    def _polygon_bounds(
+        polygons: list[list[list[int]]],
+    ) -> list[int] | None:
+        """取标定多边形的外接矩形，仅供原脚本兼容参数使用。"""
+        points = [point for polygon in polygons for point in polygon]
+        if not points:
+            return None
+        xs = [int(point[0]) for point in points]
+        ys = [int(point[1]) for point in points]
+        if max(xs) - min(xs) < 2 or max(ys) - min(ys) < 2:
+            return None
+        return [min(xs), min(ys), max(xs), max(ys)]
+
+    def _detection_in_calibration(
+        self,
+        detection: dict[str, Any],
+        calibration: list[list[list[int]]],
+    ) -> bool:
+        """判断检测框中心是否落在任一标定多边形内。"""
+        if not calibration:
+            return True
+        bbox = detection.get("bbox")
+        if not isinstance(bbox, (list, tuple)) or len(bbox) < 4:
+            return False
+        center = detection.get("center")
+        if not isinstance(center, (list, tuple)) or len(center) < 2:
+            center = [
+                (float(bbox[0]) + float(bbox[2])) / 2,
+                (float(bbox[1]) + float(bbox[3])) / 2,
+            ]
+        try:
+            point = (float(center[0]), float(center[1]))
+        except (TypeError, ValueError):
+            return False
+        for polygon in calibration:
+            contour = self._numpy.asarray(polygon, dtype=self._numpy.float32)
+            if contour.shape[0] < 4:
+                continue
+            if self._cv2.pointPolygonTest(contour, point, False) >= 0:
+                return True
+        return False
+
+    def _filter_detections_by_calibration(
+        self,
+        detections: Iterable[dict[str, Any]],
+        calibration: list[list[list[int]]],
+    ) -> list[dict[str, Any]]:
+        """保留标定区内的结果，不对输入图片做裁剪或遮罩。"""
+        return [
+            detection
+            for detection in detections
+            if self._detection_in_calibration(detection, calibration)
+        ]
 
     @classmethod
     def _normalise_helpers(
@@ -803,7 +990,7 @@ class LocalInferenceEngine:
         dictionary = str(stage.get("dictionary", "")).strip()
         config: dict[str, Any] = {}
         if dictionary:
-            dictionary_path = Path(dictionary)
+            dictionary_path = _normalise_path(dictionary)
             candidates = [
                 dictionary_path,
                 self.root_dir / dictionary_path,
@@ -833,7 +1020,12 @@ class LocalInferenceEngine:
                 source_dir = self.root_dir / "src"
                 if str(source_dir) not in sys.path:
                     sys.path.insert(0, str(source_dir))
-                from base.base_crnn_nv.base_crnn import CRNN
+                # 用 src/base 下的顶层包名导入：加入 src/algorithm 后，
+                # ``base`` 会指向 algorithm.base 常规包，不能再作为前缀。
+                base_dir = source_dir / "base"
+                if str(base_dir) not in sys.path:
+                    sys.path.append(str(base_dir))
+                from base_crnn_nv.base_crnn import CRNN
 
                 self._log(f"加载 CRNN 模型: {path}")
                 model = CRNN(str(path), config)
@@ -866,7 +1058,10 @@ class LocalInferenceEngine:
                 source_dir = self.root_dir / "src"
                 if str(source_dir) not in sys.path:
                     sys.path.insert(0, str(source_dir))
-                from base.base_ppocr_nv.base_ppocr import BasePPOCR
+                base_dir = source_dir / "base"
+                if str(base_dir) not in sys.path:
+                    sys.path.append(str(base_dir))
+                from base_ppocr_nv.base_ppocr import BasePPOCR
 
                 self._log(f"加载 PaddleOCR 模型: {path}")
                 model = BasePPOCR(str(path), config)
@@ -985,12 +1180,17 @@ class LocalInferenceEngine:
             stages = []
             supported = True
             unsupported_reasons: list[str] = []
+            src_available = self._src_ability_available(ability_name)
             for index, stage in self._pipeline_items(ability):
                 base_name = str(stage.get("base", ""))
                 executor = self._stage_executor(stage)
                 executable = executor in {"yolo", "crnn", "ppocr"} and (
                     executor != "crnn" or self._torch is not None
                 )
+                if src_available:
+                    # src 调用链能加载时，阶段由原脚本执行，内置执行器只作为回退。
+                    executor = "src"
+                    executable = True
                 unsupported_reason = ""
                 if not executable and ability_name not in {"image_black"}:
                     supported = False
@@ -1002,7 +1202,9 @@ class LocalInferenceEngine:
                 candidate = None
                 resolution = "unavailable"
                 try:
-                    candidate, resolution = self._resolve_model(stage.get("param"), None, stage)
+                    candidate, resolution = self._resolve_model(
+                        stage.get("param"), None, stage
+                    )
                 except ModelResolutionError:
                     pass
                 stages.append(
@@ -1015,12 +1217,16 @@ class LocalInferenceEngine:
                         "resolution": resolution,
                         "executor": executor,
                         "executable": executable,
+                        "source_chain": src_available,
                         "unsupported_reason": unsupported_reason,
                         "ret_keys": [str(item) for item in (stage.get("ret_keys") or [])],
                         "kpt_names": [str(item) for item in (stage.get("kpt_names") or [])],
                         "class_names": self._normalise_names(
                             stage.get("cls_names", ability.get("cls_names", {}))
                         ),
+                        "pre_process": [
+                            str(item) for item in (stage.get("pre_process") or [])
+                        ],
                     }
                 )
             entries.append(
@@ -1030,6 +1236,7 @@ class LocalInferenceEngine:
                     "debug": bool(ability.get("debug", False)),
                     "ret_img": bool(ability.get("ret_img", True)),
                     "supported": supported,
+                    "source_chain": src_available,
                     "unsupported_reasons": unsupported_reasons,
                     "stages": stages,
                     "select_cls": ability.get("select_cls"),
@@ -1092,6 +1299,8 @@ class LocalInferenceEngine:
         settings: dict[str, Any] | None = None,
         stage_models: dict[str, Any] | list[dict[str, Any]] | None = None,
         helpers: dict[str, Any] | None = None,
+        calibration: Any = None,
+        inference_mode: str = "local",
     ) -> dict[str, Any]:
         """执行一次描述文件驱动的本地推理请求。"""
         self._ensure_image_runtime()
@@ -1106,14 +1315,21 @@ class LocalInferenceEngine:
             raise LocalInferenceError("输入图片必须是 BGR 三通道图像。")
 
         height, width = image.shape[:2]
-        normalized_roi = self._normalise_roi(roi, width, height)
+        calibration_input = calibration if calibration is not None else roi
+        calibration = self._normalise_calibration_polygons(
+            calibration_input, width, height
+        )
+        inference_mode = str(inference_mode or "local").strip().lower()
+        if inference_mode not in {"local", "src"}:
+            raise LocalInferenceError("推理链路必须是 local 或 src。")
+        normalized_roi = self._polygon_bounds(calibration)
         normalized_helpers = self._normalise_helpers(helpers, width, height)
         request_logs: list[str] = []
         started_at = time.perf_counter()
         ability = self._abilities[ability_name]
         self._log(
             f"开始推理: ability={ability_name}, size={width}x{height}, "
-            f"roi={normalized_roi or 'full'}",
+            f"calibration={'%d 个标定框' % len(calibration) if calibration else '全图'}",
             request_logs,
         )
 
@@ -1122,23 +1338,21 @@ class LocalInferenceEngine:
                 image, ability_name, ability, normalized_roi, request_logs
             )
         else:
-            if any(
-                self._stage_executor(stage) == "yolo"
-                for _, stage in self._pipeline_items(ability)
-            ):
-                self._ensure_runtime()
-            response = self._infer_pipeline(
+            response = self._infer_with_fallback(
                 image,
                 ability_name,
                 ability,
-                normalized_roi,
+                calibration,
                 model_override,
                 stage_models,
                 normalized_helpers,
                 settings,
                 request_logs,
+                inference_mode,
             )
 
+        response["requested_inference_mode"] = inference_mode
+        response.setdefault("inference_mode", inference_mode)
         response["elapsed_ms"] = round(
             (time.perf_counter() - started_at) * 1000, 2
         )
@@ -1153,12 +1367,110 @@ class LocalInferenceEngine:
         )
         return response
 
+    def _infer_with_fallback(
+        self,
+        image: Any,
+        ability_name: str,
+        ability: dict[str, Any],
+        calibration: list[list[list[int]]],
+        model_override: str | None,
+        stage_models: dict[str, Any] | list[dict[str, Any]] | None,
+        helpers: dict[str, list[dict[str, Any]]],
+        settings: dict[str, Any],
+        request_logs: list[str],
+        inference_mode: str,
+    ) -> dict[str, Any]:
+        """按用户选择执行 src 调用链或内置本地执行器。
+
+        ``src`` 模式必须使用描述文件指定的原脚本链路；``local`` 模式
+        只使用本模块的本地执行器，避免按钮状态与实际调用链不一致。
+        """
+        if inference_mode == "src":
+            reason = self._src_ability_unavailable_reason(ability_name)
+            try:
+                if reason:
+                    raise SourceChainError(reason)
+                return self._run_src_pipeline(
+                    image,
+                    ability_name,
+                    ability,
+                    calibration,
+                    model_override,
+                    stage_models,
+                    helpers,
+                    settings,
+                    request_logs,
+                )
+            except (
+                SourceChainError,
+                ModelResolutionError,
+                LocalDependencyError,
+                ImportError,
+                ModuleNotFoundError,
+                FileNotFoundError,
+                OSError,
+            ) as exc:
+                reason = f"{type(exc).__name__}: {exc}"
+                self._log(
+                    "algorithm/src 调用链不可用，原因："
+                    f"{reason}；自动回退到本地自推理。",
+                    request_logs,
+                )
+                if any(
+                    self._stage_executor(stage) == "yolo"
+                    for _, stage in self._pipeline_items(ability)
+                ):
+                    self._ensure_runtime()
+                response = self._infer_pipeline(
+                    image,
+                    ability_name,
+                    ability,
+                    calibration,
+                    model_override,
+                    stage_models,
+                    helpers,
+                    settings,
+                    request_logs,
+                )
+                response["inference_mode"] = "local"
+                response["inference_fallback"] = {
+                    "from": "src",
+                    "to": "local",
+                    "reason": reason,
+                }
+                response["compatibility"] = (
+                    "algorithm/src 调用链不可用，已按日志记录原因并自动回退到本地自推理。"
+                )
+                return response
+
+        if any(
+            self._stage_executor(stage) == "yolo"
+            for _, stage in self._pipeline_items(ability)
+        ):
+            self._ensure_runtime()
+        response = self._infer_pipeline(
+            image,
+            ability_name,
+            ability,
+            calibration,
+            model_override,
+            stage_models,
+            helpers,
+            settings,
+            request_logs,
+        )
+        response["inference_mode"] = "local"
+        response["compatibility"] = (
+            "使用 model_descriptor.yaml 驱动的本地自推理执行器，未调用 algorithm/src 原脚本。"
+        )
+        return response
+
     def _infer_pipeline(
         self,
         image: Any,
         ability_name: str,
         ability: dict[str, Any],
-        roi: list[int] | None,
+        calibration: list[list[list[int]]],
         model_override: str | None,
         stage_models: dict[str, Any] | list[dict[str, Any]] | None,
         helpers: dict[str, list[dict[str, Any]]],
@@ -1174,7 +1486,7 @@ class LocalInferenceEngine:
                 image,
                 ability_name,
                 ability,
-                roi,
+                calibration,
                 model_override,
                 stage_models,
                 helpers,
@@ -1216,10 +1528,6 @@ class LocalInferenceEngine:
             if stage_position == 0:
                 source = image
                 offset = (0, 0)
-                if roi is not None:
-                    x1, y1, x2, y2 = roi
-                    source = image[y1:y2, x1:x2]
-                    offset = (x1, y1)
                 detections, stage_info = self._run_stage(
                     source,
                     offset,
@@ -1250,6 +1558,11 @@ class LocalInferenceEngine:
                     stage_info["manual_box_count"] = len(manual_boxes)
                     stage_info["returned_count"] = len(detections)
                     stage_info["detections"] = detections
+                detections = self._filter_detections_by_calibration(
+                    detections, calibration
+                )
+                stage_info["detections"] = detections
+                stage_info["returned_count"] = len(detections)
                 parents = detections
             else:
                 next_detections: list[dict[str, Any]] = []
@@ -1351,6 +1664,9 @@ class LocalInferenceEngine:
                     image.shape[1],
                     image.shape[0],
                 )
+                next_detections = self._filter_detections_by_calibration(
+                    next_detections, calibration
+                )
                 manual_box_count = len(
                     self._manual_parent_boxes(
                         helpers, stage_index, include_unassigned=False
@@ -1389,7 +1705,7 @@ class LocalInferenceEngine:
         annotated = self._annotate(
             image,
             detections,
-            roi,
+            calibration,
             ability_name,
             helpers.get("points", []),
         )
@@ -1435,7 +1751,8 @@ class LocalInferenceEngine:
             "desc": result_desc,
             "confidence": round(max_conf, 6),
             "image_size": {"width": int(image.shape[1]), "height": int(image.shape[0])},
-            "roi": roi,
+            "roi": None,
+            "calibration_polygons": calibration,
             "detections": detections,
             "stages": stage_results,
             "skipped_stages": skipped_stages,
@@ -1444,12 +1761,13 @@ class LocalInferenceEngine:
                 "points": helpers.get("points", []),
                 "boxes": helpers.get("boxes", []),
                 "box_adjustments": helpers.get("box_adjustments", []),
+                "calibration_polygons": calibration,
                 "ret_keys": ret_keys,
                 "values": returned_values,
             },
             "annotated_image": self._image_to_data_url(annotated),
             "compatibility": (
-                "本地适配器按描述文件执行 YOLO 检测、ROI 裁剪和类别过滤；"
+                "本地适配器按描述文件执行 YOLO 检测、标定区过滤和类别过滤；"
                 "特殊硬件算子仍以服务器运行时为准。"
             ),
         }
@@ -1459,7 +1777,7 @@ class LocalInferenceEngine:
         image: Any,
         ability_name: str,
         ability: dict[str, Any],
-        roi: list[int] | None,
+        calibration: list[list[list[int]]],
         model_override: str | None,
         stage_models: dict[str, Any] | list[dict[str, Any]] | None,
         helpers: dict[str, list[dict[str, Any]]],
@@ -1490,10 +1808,6 @@ class LocalInferenceEngine:
 
         source = image
         offset = (0, 0)
-        if roi:
-            x1, y1, x2, y2 = roi
-            source = image[y1:y2, x1:x2]
-            offset = (x1, y1)
         p1_detections, p1_info = self._run_stage(
             source,
             offset,
@@ -1510,6 +1824,9 @@ class LocalInferenceEngine:
         p1_detections = self._apply_point_helpers(
             p1_detections, helpers, p1_index, p1_stage
         )
+        p1_detections = self._filter_detections_by_calibration(
+            p1_detections, calibration
+        )
         p1_info["detections"] = p1_detections
         p1_info["returned_count"] = len(p1_detections)
         stages_out = [p1_info]
@@ -1522,10 +1839,10 @@ class LocalInferenceEngine:
         if not p1_detections:
             self._log("表计阶段 1 未识别到表盘，停止后续依赖链。", request_logs)
             annotated = self._annotate(
-                image, [], roi, ability_name, helpers.get("points", [])
+                image, [], calibration, ability_name, helpers.get("points", [])
             )
             return self._meter_response(
-                image, ability_name, ability, roi, [], stages_out, model_infos,
+                image, ability_name, ability, calibration, [], stages_out, model_infos,
                 annotated, helpers, "empty", "未识别到表盘"
             )
 
@@ -1634,13 +1951,13 @@ class LocalInferenceEngine:
             desc = "请使用“点绘制”补充至少两个带数值的刻度点"
             self._log(desc, request_logs)
         annotated = self._annotate_meter(
-            image, final_detections, roi, helpers.get("points", [])
+            image, final_detections, calibration, helpers.get("points", [])
         )
         return self._meter_response(
             image,
             ability_name,
             ability,
-            roi,
+            calibration,
             final_detections,
             stages_out,
             model_infos,
@@ -1837,7 +2154,7 @@ class LocalInferenceEngine:
         image: Any,
         ability_name: str,
         ability: dict[str, Any],
-        roi: list[int] | None,
+        calibration: list[list[list[int]]],
         detections: list[dict[str, Any]],
         stages: list[dict[str, Any]],
         model_infos: dict[str, dict[str, Any]],
@@ -1866,7 +2183,8 @@ class LocalInferenceEngine:
                 "width": int(image.shape[1]),
                 "height": int(image.shape[0]),
             },
-            "roi": roi,
+            "roi": None,
+            "calibration_polygons": calibration,
             "detections": detections,
             "stages": stages,
             "skipped_stages": [],
@@ -1876,6 +2194,7 @@ class LocalInferenceEngine:
                 "boxes": helpers.get("boxes", []),
                 "box_adjustments": helpers.get("box_adjustments", []),
                 "meter_pipeline": True,
+                "calibration_polygons": calibration,
             },
             "annotated_image": self._image_to_data_url(annotated),
             "compatibility": (
@@ -1888,10 +2207,12 @@ class LocalInferenceEngine:
         self,
         image: Any,
         detections: list[dict[str, Any]],
-        roi: list[int] | None,
+        calibration: list[list[list[int]]],
         points: Iterable[dict[str, Any]],
     ) -> Any:
-        canvas = self._annotate(image, detections, roi, "__portal_meter__", points)
+        canvas = self._annotate(
+            image, detections, calibration, "__portal_meter__", points
+        )
         for detection in detections:
             keypoints = detection.get("keypoints") or {}
             center = keypoints.get("center_pointer", {}).get("point")
@@ -1917,6 +2238,805 @@ class LocalInferenceEngine:
                         canvas, str(mark["value"]), (px + 10, py), (255, 120, 0)
                     )
         return canvas
+
+    # ------------------------------------------------------------------
+    # src 调用链：完全按服务器约定执行 src/base + src/algorithm 脚本
+    # ------------------------------------------------------------------
+
+    def _ensure_src_paths(self) -> None:
+        """把 ``src``、``src/base`` 和 ``src/algorithm`` 加入 ``sys.path``。
+
+        ``src/base`` 与 ``src/algorithm`` 下的目录名本身就是顶层包名
+        （``base_yolo_nv``、``light_pgzsd`` 等），与
+        ``src/core/loader.py`` 服务端的 ``sys.path.append`` 行为一致。
+        """
+        with _SRC_PATH_LOCK:
+            for directory in (
+                self.root_dir / "src",
+                self.root_dir / "src" / "base",
+                self.root_dir / "src" / "algorithm",
+                self.root_dir / "src" / "algorithm" / "base",
+            ):
+                key = str(directory)
+                if key in _SRC_PATHS or not directory.is_dir():
+                    continue
+                if key not in sys.path:
+                    sys.path.append(key)
+                _SRC_PATHS.add(key)
+
+    def _import_src_module(self, module_name: str) -> Any:
+        """按服务器约定导入 ``src`` 下的顶层模块，并缓存结果。"""
+        with self._model_lock:
+            cached = self._src_modules.get(module_name)
+            if cached is not None:
+                return cached
+        self._ensure_src_paths()
+        try:
+            module = importlib.import_module(module_name)
+        except Exception as exc:
+            raise SourceChainError(
+                f"无法导入 src 模块 {module_name}: {type(exc).__name__}: {exc}"
+            ) from exc
+        with self._model_lock:
+            self._src_modules[module_name] = module
+        return module
+
+    def _load_src_result_types(self) -> tuple[type, Any, Any] | None:
+        """导入并缓存 ``IRResult``/``IRState``/``DetResult`` 类型。"""
+        if self._src_result_types is not None:
+            return self._src_result_types
+        try:
+            module = self._import_src_module("algorithm.base.result")
+        except SourceChainError:
+            return None
+        result_type = getattr(module, "IRResult", None)
+        state_type = getattr(module, "IRState", None)
+        if result_type is None or state_type is None:
+            return None
+        self._src_result_types = (
+            result_type,
+            state_type,
+            getattr(module, "DetResult", None),
+        )
+        return self._src_result_types
+
+    def _src_base_module_name(self, stage: dict[str, Any], path: Path) -> str:
+        """把描述文件的 ``base`` 名映射到 ``src/base`` 的硬件专用模块名。
+
+        描述文件写的是设备无关名（``base_yolo``、``base_ppocr``），
+        ``src/core/loader.py`` 会按设备附上 ``_nv``、``_om`` 或 ``_rknn``
+        后缀。本地权重是 ``.pt``，因此对应 ``_nv``。
+        """
+        base_name = str(stage.get("base", "")).strip()
+        if not base_name:
+            raise SourceChainError("流水线阶段缺少 base 字段，无法走 src 调用链。")
+        if base_name.endswith(("_nv", "_om", "_rknn")):
+            return base_name
+        suffix = self.SOURCE_BASE_SUFFIXES.get(path.suffix.lower(), "_nv")
+        return f"{base_name}{suffix}"
+
+    def _src_patch_module_name(self, stage: dict[str, Any]) -> str:
+        """读取阶段 ``patch`` 名，没有 patch 时回退到 ``base`` 名。"""
+        patch_name = str(stage.get("patch", "")).strip()
+        if patch_name:
+            return patch_name
+        return str(stage.get("base", "")).strip()
+
+    def _build_prv_config(
+        self,
+        ability_name: str,
+        ability: dict[str, Any],
+        calibration: Any,
+        helpers: dict[str, list[dict[str, Any]]],
+        settings: dict[str, Any],
+        width: int,
+        height: int,
+    ) -> dict[str, Any]:
+        """构造与原项目 ``handler._core_infer`` 等价的 ``prv_config``。
+
+        原脚本会直接索引 ``descriptor['conf']``、``params[ability]['marks']``
+        等键，因此这里必须补齐这些字段，不能只填流水线信息。
+        """
+        descriptor = copy.deepcopy(ability)
+        pipeline = descriptor.get("pipeline") or {}
+        descriptor["pipeline"] = {
+            int(key) if str(key).isdigit() else key: value
+            for key, value in pipeline.items()
+        }
+        for field in (
+            "cls_names",
+            "select_cls",
+            "trans_cls",
+            "cls_conf",
+            "kpt_names",
+            "kpt_dims",
+        ):
+            if ability.get(field) is not None:
+                descriptor[field] = copy.deepcopy(ability[field])
+        descriptor.setdefault("conf", ability.get("conf", settings.get("conf", 0.25)))
+        descriptor.setdefault("iou", ability.get("iou", settings.get("iou", 0.7)))
+        if settings.get("conf") not in (None, ""):
+            descriptor["conf"] = settings["conf"]
+        if settings.get("iou") not in (None, ""):
+            descriptor["iou"] = settings["iou"]
+
+        params: dict[str, Any] = {ability_name: {}}
+        polygons = self._normalise_calibration_polygons(calibration, width, height)
+        if polygons:
+            # 原项目的标定语义：多边形通过 on_intersection_output 交给
+            # patch 脚本，由项目自己的 `_fetch_intersections_polygons`
+            # 过滤框中心落在标定区的检测结果。
+            params[ability_name]["on_intersection_output"] = [
+                {
+                    "type": "polygon",
+                    "points": [
+                        coordinate
+                        for point in polygon
+                        for coordinate in (int(point[0]), int(point[1]))
+                    ],
+                    "usage": "analyze",
+                }
+                for polygon in polygons
+            ]
+            needs_internal_roi = any(
+                "crop_by_roi" in {
+                    str(item).strip() for item in (stage.get("pre_process") or [])
+                }
+                for _, stage in self._pipeline_items(ability)
+            )
+            if needs_internal_roi:
+                # 只有明确声明 crop_by_roi 的原脚本才接收这个兼容字段；
+                # 网页和通用推理逻辑始终使用多边形标定区。
+                bounds = self._polygon_bounds(polygons)
+                if bounds is not None:
+                    params[ability_name]["roi"] = bounds
+        marks = []
+        for point in helpers.get("points", []):
+            if point.get("value") in (None, ""):
+                continue
+            try:
+                value = float(point["value"])
+            except (TypeError, ValueError):
+                continue
+            marks.append({"value": value, "point": [int(point["x"]), int(point["y"])]})
+        if marks:
+            params[ability_name]["marks"] = marks
+
+        return {
+            "task_id": datetime.now().strftime("%H%M%S%f"),
+            "ability": ability_name,
+            "descriptor": descriptor,
+            "params": params,
+            "normal_image": None,
+            "pipeline_idx": 1,
+        }
+
+    def _source_stage_config(
+        self,
+        stage: dict[str, Any],
+        ability: dict[str, Any],
+        path: Path,
+    ) -> dict[str, Any]:
+        """构造基类构造函数所需的 config，字段名与描述文件保持一致。"""
+        config = copy.deepcopy(stage)
+        for field in (
+            "cls_names",
+            "select_cls",
+            "trans_cls",
+            "cls_conf",
+            "kpt_names",
+            "kpt_dims",
+        ):
+            if stage.get(field) is None and ability.get(field) is not None:
+                config[field] = copy.deepcopy(ability[field])
+        config["device"] = "cpu" if self.device == "auto" else self.device
+        config["param"] = str(stage.get("param", ""))
+        config["base"] = str(stage.get("base", ""))
+        config["model_path"] = str(path)
+        return config
+
+    @staticmethod
+    def _infer_name_for_stage(stage: dict[str, Any]) -> str:
+        """无 patch 阶段按描述文件推断应调用的基类推理方法。"""
+        if stage.get("kpt_names"):
+            return "_infer_kpt"
+        if "obb" in str(stage.get("base", "")).lower():
+            return "_infer_obb"
+        return "_infer_det"
+
+    def _load_src_executor(
+        self,
+        stage: dict[str, Any],
+        ability: dict[str, Any],
+        path: Path,
+    ) -> Any:
+        """按 ``src/core/loader.py`` 的方式构建一个可调用的阶段执行器。"""
+        base_module_name = self._src_base_module_name(stage, path)
+        patch_module_name = self._src_patch_module_name(stage)
+        cache_key = (base_module_name, patch_module_name, str(path.resolve()))
+        with self._model_lock:
+            cached = self._src_executors.get(cache_key)
+        if cached is not None:
+            return cached
+
+        identifier = f"{patch_module_name}@{path.name}"
+        self._log(f"src 调用链加载 {identifier}: base={base_module_name}")
+        base_module = self._import_src_module(base_module_name)
+        create_object = getattr(base_module, "create_base_core_object", None)
+        if not callable(create_object):
+            raise SourceChainError(
+                f"src 模块 {base_module_name} 未提供 create_base_core_object。"
+            )
+
+        config = self._source_stage_config(stage, ability, path)
+        try:
+            executor = create_object(model_path=str(path), config=config)
+        except Exception as exc:
+            raise SourceChainError(
+                f"src 调用链创建模型对象失败 {identifier}: "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
+
+        if str(stage.get("patch", "")).strip():
+            patch_module = self._import_src_module(patch_module_name)
+            patch_functions = [
+                name
+                for name in dir(patch_module)
+                if name.startswith("patch_") and callable(getattr(patch_module, name))
+            ]
+            if not patch_functions:
+                raise SourceChainError(
+                    f"src 算法模块 {patch_module_name} 没有可绑定的 patch_* 函数。"
+                )
+            for function_name in patch_functions:
+                bound_name = function_name.split("patch_", 1)[1]
+                function = getattr(patch_module, function_name)
+                setattr(executor, bound_name, MethodType(function, executor))
+            self._log(
+                f"src 调用链绑定 {patch_module_name}: "
+                f"{', '.join(sorted(patch_functions))}"
+            )
+        else:
+            infer_name = self._infer_name_for_stage(stage)
+            infer_function = getattr(base_module, infer_name, None)
+            if not callable(infer_function):
+                raise SourceChainError(
+                    f"src 基类 {base_module_name} 缺少 {infer_name}，且阶段未声明 patch。"
+                )
+            setattr(executor, "infer", MethodType(infer_function, executor))
+
+        with self._model_lock:
+            self._src_executors[cache_key] = executor
+        return executor
+
+    def _src_ability_available(self, ability_name: str) -> bool:
+        """判断能力是否可以在本地走 src 调用链。
+
+        只做文件存在性检查，不导入模块：网页加载配置时不应加载全部权重。
+        """
+        cached = self._src_ability_cache.get(ability_name)
+        if cached is not None:
+            return cached
+        available = not self._src_ability_unavailable_reason(ability_name)
+        self._src_ability_cache[ability_name] = available
+        return available
+
+    def _src_ability_unavailable_reason(self, ability_name: str) -> str:
+        """Return the concrete reason the descriptor-driven src chain is unavailable."""
+        ability = self._abilities.get(ability_name)
+        if not isinstance(ability, dict):
+            return f"能力 {ability_name} 不存在于 model_descriptor.yaml。"
+        stages = self._pipeline_items(ability)
+        if not stages:
+            return f"能力 {ability_name} 没有可执行 pipeline。"
+        for stage_index, stage in stages:
+            patch_name = str(stage.get("patch", "")).strip()
+            base_name = str(stage.get("base", "")).strip()
+            if not base_name:
+                return f"P{stage_index} 未配置 base。"
+            base_candidates = [base_name]
+            if not base_name.endswith(("_nv", "_om", "_rknn")):
+                base_candidates = [
+                    f"{base_name}{suffix}"
+                    for suffix in ("_nv", "_om", "_rknn")
+                ]
+            base_roots = (
+                self.root_dir / "src" / "base",
+                self.root_dir / "src" / "algorithm" / "base",
+            )
+            if not any(
+                (root / candidate).is_dir() or (root / f"{candidate}.py").is_file()
+                for root in base_roots
+                for candidate in base_candidates
+            ):
+                return (
+                    f"P{stage_index} 找不到 base 模块 {base_name}"
+                    "（已检查 src/base 和 src/algorithm/base）。"
+                )
+            if patch_name and not (
+                self.root_dir / "src" / "algorithm" / patch_name
+            ).is_dir():
+                return (
+                    f"P{stage_index} 找不到 algorithm patch {patch_name}"
+                    "（已检查 src/algorithm）。"
+                )
+        return ""
+
+    @staticmethod
+    def _src_result_objects(stage_output: Any, result_type: type) -> list[Any]:
+        """把脚本返回值规范化为 ``IRResult`` 列表。"""
+        if stage_output is None:
+            return []
+        items = (
+            list(stage_output)
+            if isinstance(stage_output, (list, tuple))
+            else [stage_output]
+        )
+        return [item for item in items if isinstance(item, result_type)]
+
+    @staticmethod
+    def _src_stage_state(result_objects: list[Any], state_type: Any) -> str:
+        """把 ``IRState`` 映射为网页使用的状态字符串。"""
+        if not result_objects:
+            return ""
+        state = getattr(result_objects[0], "state", None)
+        mapping = {
+            getattr(state_type, "FINAL", None): "final",
+            getattr(state_type, "INTERMEDIATE", None): "intermediate",
+            getattr(state_type, "EMPTY", None): "empty",
+            getattr(state_type, "ERROR", None): "error",
+        }
+        return mapping.get(state, "")
+
+    @staticmethod
+    def _src_flatten_detections(
+        stage_results: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """取最后一个有检测框的阶段结果作为最终展示结果。"""
+        for stage_result in reversed(stage_results):
+            detections = stage_result.get("detections") or []
+            if detections:
+                return detections
+        return []
+
+    def _src_detections(
+        self,
+        result_objects: list[Any],
+        stage: dict[str, Any],
+        stage_index: int,
+    ) -> list[dict[str, Any]]:
+        """把 ``IRResult`` 中的框、关键点和返回值转成网页结构。"""
+        detections: list[dict[str, Any]] = []
+        for result_object in result_objects:
+            box = getattr(result_object, "result", None)
+            if box is None:
+                continue
+            try:
+                top_left, bottom_right = box.xyxy
+            except Exception:
+                continue
+            x1, y1 = int(top_left[0]), int(top_left[1])
+            x2, y2 = int(bottom_right[0]), int(bottom_right[1])
+            class_name = str(getattr(box, "cls_name", "") or "")
+            prompt = str(getattr(result_object, "prompt_str", "") or "")
+            value_result = getattr(result_object, "value_result", None) or {}
+            detection: dict[str, Any] = {
+                "stage": stage_index,
+                "class_id": getattr(box, "cls_id", -1),
+                "class_name": class_name,
+                "display_name": self._src_display_name(class_name, prompt),
+                "confidence": round(float(getattr(box, "conf", 0.0) or 0.0), 6),
+                "bbox": [x1, y1, x2, y2],
+                "center": [int(round((x1 + x2) / 2)), int(round((y1 + y2) / 2))],
+            }
+            keypoints = self._src_keypoints(box, stage)
+            if keypoints:
+                detection["keypoints"] = keypoints
+            if isinstance(value_result, dict) and value_result.get("value") not in (
+                None,
+                "",
+            ):
+                detection["value"] = str(value_result["value"])
+            detections.append(detection)
+        return detections
+
+    @staticmethod
+    def _src_display_name(class_name: str, prompt: str) -> str:
+        """优先使用脚本给出的描述文本，其次使用类别名。"""
+        if prompt and ":" in prompt:
+            tail = prompt.split(":", 1)[1].strip()
+            if tail:
+                return tail
+        return class_name or prompt
+
+    @staticmethod
+    def _src_keypoints(
+        box: Any, stage: dict[str, Any]
+    ) -> dict[str, dict[str, Any]]:
+        """读取 ``KptResult`` 关键点，保留描述文件中的名称顺序。"""
+        names = [str(item) for item in (stage.get("kpt_names") or [])]
+        if not names or not hasattr(box, "kpt_xyxy"):
+            return {}
+        keypoints: dict[str, dict[str, Any]] = {}
+        for index, name in enumerate(names):
+            try:
+                point = box.kpt_xyxy(index)
+            except Exception:
+                continue
+            if point is None or len(point) < 2:
+                continue
+            keypoints[name] = {"point": [int(point[0]), int(point[1])]}
+        return keypoints
+
+    @staticmethod
+    def _src_stage_values(
+        result_objects: list[Any],
+        stage: dict[str, Any],
+    ) -> dict[str, Any]:
+        """从阶段结果提取 ``ret_keys`` 或脚本值，供后续阶段与网页使用。"""
+        values: dict[str, Any] = {}
+        keys = [str(item) for item in (stage.get("ret_keys") or [])]
+        for result_object in result_objects:
+            value_result = getattr(result_object, "value_result", None) or {}
+            if not isinstance(value_result, dict):
+                continue
+            value = value_result.get("value")
+            if value in (None, ""):
+                continue
+            if keys:
+                for key in keys:
+                    values.setdefault(key, value)
+            else:
+                values.setdefault("value", value)
+        return values
+
+    @staticmethod
+    def _src_decode_value(value: Any) -> Any:
+        """解码算法脚本常见的 JSON 字符串返回值。"""
+        if not isinstance(value, str):
+            return value
+        try:
+            return json.loads(value)
+        except (TypeError, ValueError):
+            return value
+
+    def _src_categories(
+        self,
+        result_objects: list[Any],
+        stage: dict[str, Any],
+        ability: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """按描述文件的 select_cls/trans_cls 解析脚本返回的类别结果。"""
+        names = self._normalise_names(
+            stage.get("cls_names", ability.get("cls_names", {}))
+        )
+        select_cls = [
+            str(item)
+            for item in (stage.get("select_cls") or ability.get("select_cls") or [])
+        ]
+        trans_cls = self._normalise_mapping(
+            stage.get("trans_cls", ability.get("trans_cls", {}))
+        )
+        categories: list[dict[str, Any]] = []
+
+        for result_object in result_objects:
+            value_result = getattr(result_object, "value_result", None) or {}
+            if not isinstance(value_result, dict):
+                continue
+            raw_value = value_result.get("value")
+            if raw_value in (None, ""):
+                continue
+            payload = self._src_decode_value(raw_value)
+            if isinstance(payload, dict):
+                items = list(payload.items())
+            elif isinstance(payload, list):
+                items = [(str(index + 1), item) for index, item in enumerate(payload)]
+            else:
+                text = str(payload).strip()
+                if text in {"", "0"}:
+                    continue
+                items = [("value", payload)]
+
+            for source_key, item in items:
+                class_id: int | None = None
+                class_name = ""
+                try:
+                    class_id = int(item)
+                except (TypeError, ValueError):
+                    class_name = str(item).strip()
+                if class_id is not None:
+                    class_name = names.get(class_id, "")
+                    if not class_name and 0 <= class_id < len(select_cls):
+                        class_name = select_cls[class_id]
+                    if not class_name and 1 <= class_id <= len(select_cls):
+                        class_name = select_cls[class_id - 1]
+                    if not class_name:
+                        class_name = str(item)
+                display_name = str(trans_cls.get(class_name, class_name or item))
+                categories.append(
+                    {
+                        "source_key": str(source_key),
+                        "class_id": class_id,
+                        "class_name": class_name,
+                        "display_name": display_name,
+                        "value": item,
+                        "confidence": None,
+                    }
+                )
+        return categories
+
+    def _src_related_image_to_bgr(self, related_image: str) -> Any:
+        """把脚本返回的 base64 结果图解码为 OpenCV 图像。"""
+        self._ensure_image_runtime()
+        encoded = (
+            related_image.split(",", 1)[1] if "," in related_image else related_image
+        )
+        try:
+            raw = base64.b64decode(encoded)
+        except Exception:
+            return None
+        return self._cv2.imdecode(
+            self._numpy.frombuffer(raw, dtype=self._numpy.uint8),
+            self._cv2.IMREAD_COLOR,
+        )
+
+    def _run_src_pipeline(
+        self,
+        image: Any,
+        ability_name: str,
+        ability: dict[str, Any],
+        calibration: list[list[list[int]]],
+        model_override: str | None,
+        stage_models: dict[str, Any] | list[dict[str, Any]] | None,
+        helpers: dict[str, list[dict[str, Any]]],
+        settings: dict[str, Any],
+        request_logs: list[str],
+    ) -> dict[str, Any]:
+        """完全按服务器约定执行 src/base + src/algorithm 多段推理。"""
+        stages = self._pipeline_items(ability)
+        if not stages:
+            raise LocalInferenceError(f"能力没有可执行流水线: {ability_name}")
+
+        result_types = self._load_src_result_types()
+        if result_types is None:
+            raise SourceChainError("无法加载 algorithm.base.result，src 调用链不可用。")
+        result_type, state_type, _ = result_types
+
+        prv_config = self._build_prv_config(
+            ability_name,
+            ability,
+            calibration,
+            helpers,
+            settings,
+            image.shape[1],
+            image.shape[0],
+        )
+        prv_image = image
+        prv_result: list[Any] | None = None
+        stage_results: list[dict[str, Any]] = []
+        ret_keys = [
+            str(item)
+            for _, stage in stages
+            for item in (stage.get("ret_keys") or [])
+        ]
+        returned_values: dict[str, Any] = {}
+        final_related_image = ""
+        final_state = "empty"
+        categories: list[dict[str, Any]] = []
+
+        for stage_index, stage in stages:
+            candidate, resolution = self._resolve_model(
+                stage.get("param"),
+                self._stage_override(stage_models, stage_index) or model_override,
+                stage,
+            )
+            executor = self._load_src_executor(stage, ability, candidate.absolute_path)
+            prv_config["pipeline_idx"] = stage_index
+            stage_started = time.perf_counter()
+            try:
+                prv_image, stage_output, prv_config = executor.infer(
+                    prv_image, prv_result, prv_config
+                )
+            except Exception as exc:
+                hint = ""
+                if isinstance(exc, KeyError):
+                    missing = str(exc).strip("'\"")
+                    if missing == "marks":
+                        hint = "；该能力需要在网页“点绘制”里补充带数值的标定点"
+                    elif missing == "roi":
+                        hint = "；该能力需要先绘制标定框"
+                    elif missing.startswith("p1_") or missing.startswith("p2_"):
+                        hint = "；该阶段依赖上一阶段输出，请确认前置阶段识别成功"
+                raise SourceChainError(
+                    f"src 算法阶段 P{stage_index} "
+                    f"({stage.get('patch', stage.get('base', ''))}) 执行失败: "
+                    f"{type(exc).__name__}: {exc}{hint}"
+                ) from exc
+            elapsed_ms = round((time.perf_counter() - stage_started) * 1000, 2)
+
+            result_objects = self._src_result_objects(stage_output, result_type)
+            stage_state = self._src_stage_state(result_objects, state_type)
+            # EMPTY/ERROR 的占位框不是真实检测结果：服务器语义里
+            # 它们代表“没有识别到目标”，不应出现在网页检测列表中。
+            detections = (
+                []
+                if stage_state in {"empty", "error"}
+                else self._src_detections(result_objects, stage, stage_index)
+            )
+            values = self._src_stage_values(result_objects, stage)
+            stage_categories = (
+                []
+                if stage_state in {"empty", "error"}
+                else self._src_categories(result_objects, stage, ability)
+            )
+            categories.extend(stage_categories)
+            returned_values.update(
+                {key: value for key, value in values.items() if value not in (None, "")}
+            )
+            if stage_state:
+                final_state = stage_state
+            for result_object in result_objects:
+                related = getattr(result_object, "related_image_str", "") or ""
+                if related:
+                    final_related_image = related
+
+            stage_results.append(
+                {
+                    "index": stage_index,
+                    "base": stage.get("base", ""),
+                    "patch": stage.get("patch", ""),
+                    "parameter": stage.get("param", ""),
+                    "executor": "src",
+                    "model_path": candidate.relative_path,
+                    "model_resolution": resolution,
+                    "source_module": self._src_patch_module_name(stage),
+                    "state": stage_state,
+                    "status": stage_state or "ok",
+                    "ret_keys": [str(item) for item in (stage.get("ret_keys") or [])],
+                    "values": values,
+                    "raw_count": len(result_objects),
+                    "returned_count": len(detections),
+                    "elapsed_ms": elapsed_ms,
+                    "detections": copy.deepcopy(detections),
+                    "categories": copy.deepcopy(stage_categories),
+                    "models": [],
+                }
+            )
+            self._log(
+                f"src 调用链阶段 {stage_index}: "
+                f"{stage.get('patch', stage.get('base', ''))}, "
+                f"state={stage_state or 'ok'}, returns={len(result_objects)}, "
+                f"elapsed_ms={elapsed_ms}",
+                request_logs,
+            )
+            prv_result = result_objects
+
+            if stage_state in {"empty", "error"}:
+                # 与服务器一致：EMPTY/ERROR 表示流水线中断信号。
+                self._log(
+                    f"src 调用链阶段 {stage_index} 返回 {stage_state}，提前结束流水线。",
+                    request_logs,
+                )
+                break
+
+        return self._src_response(
+            image=image,
+            ability_name=ability_name,
+            ability=ability,
+            calibration=calibration,
+            helpers=helpers,
+            stage_results=stage_results,
+            ret_keys=ret_keys,
+            returned_values=returned_values,
+            categories=categories,
+            final_related_image=final_related_image,
+            final_state=final_state,
+        )
+
+    def _src_response(
+        self,
+        image: Any,
+        ability_name: str,
+        ability: dict[str, Any],
+        calibration: list[list[list[int]]],
+        helpers: dict[str, list[dict[str, Any]]],
+        stage_results: list[dict[str, Any]],
+        ret_keys: list[str],
+        returned_values: dict[str, Any],
+        categories: list[dict[str, Any]],
+        final_related_image: str,
+        final_state: str,
+    ) -> dict[str, Any]:
+        """把 src 调用链的阶段结果整理成网页消费的响应。"""
+        detections = self._src_flatten_detections(stage_results)
+        annotated = None
+        if final_related_image:
+            annotated = self._src_related_image_to_bgr(final_related_image)
+        if annotated is None:
+            annotated = self._annotate(
+                image,
+                detections,
+                calibration,
+                ability_name,
+                helpers.get("points", []),
+            )
+        else:
+            annotated = self._draw_calibration_overlay(annotated, calibration)
+        for index, category in enumerate(categories):
+            source_key = str(category.get("source_key", f"结果 {index + 1}"))
+            display_name = str(category.get("display_name", category.get("value", "")))
+            annotated = self._draw_cn_text(
+                annotated,
+                f"{source_key}={display_name}",
+                (12, 30 + index * 28),
+                (0, 215, 255),
+            )
+        max_conf = max(
+            (float(item.get("confidence", 0.0)) for item in detections), default=0.0
+        )
+        value = next(
+            (item for item in returned_values.values() if item not in (None, "")),
+            "1" if detections else "0",
+        )
+        described = (
+            "; ".join(
+                f"{item.get('source_key', '结果')}={item.get('display_name', '')}"
+                for item in categories
+            )
+            or "; ".join(
+                f"{key}={item}"
+                for key, item in returned_values.items()
+                if item not in (None, "")
+            )
+        )
+        first_name = (
+            categories[0]["display_name"]
+            if categories
+            else detections[0]["display_name"]
+            if detections
+            else "正常"
+        )
+        # 状态以最终阶段为准，与服务器 IRState 语义保持一致：
+        # FINAL/INTERMEDIATE 表示识别到目标，EMPTY/ERROR 表示未识别到。
+        if final_state in {"empty", "error"}:
+            status = "empty"
+        elif final_state in {"final", "intermediate"}:
+            status = "detected"
+        else:
+            status = "detected" if detections else "empty"
+        return {
+            "ability": ability_name,
+            "description": str(ability.get("desc", ability_name)),
+            "status": status,
+            "value": value,
+            "desc": described or f"{ability.get('desc', ability_name)}: {first_name}",
+            "confidence": round(max_conf, 6),
+            "image_size": {
+                "width": int(image.shape[1]),
+                "height": int(image.shape[0]),
+            },
+            "roi": None,
+            "calibration_polygons": calibration,
+            "detections": detections,
+            "categories": categories,
+            "stages": stage_results,
+            "skipped_stages": [],
+            "models": [],
+            "inference_context": {
+                "points": helpers.get("points", []),
+                "boxes": helpers.get("boxes", []),
+                "box_adjustments": helpers.get("box_adjustments", []),
+                "ret_keys": ret_keys,
+                "values": returned_values,
+                "calibration_polygons": calibration,
+                "source_chain": True,
+            },
+            "annotated_image": self._image_to_data_url(annotated),
+            "compatibility": (
+                "按 src/base + src/algorithm 原脚本调用链执行多段推理，"
+                "与服务器 handler._core_infer 的流水线语义一致。"
+            ),
+        }
 
     def _run_stage(
         self,
@@ -2556,25 +3676,13 @@ class LocalInferenceEngine:
         self,
         image: Any,
         detections: Iterable[dict[str, Any]],
-        roi: list[int] | None,
+        calibration: Any,
         ability_name: str,
         points: Iterable[dict[str, Any]] | None = None,
     ) -> Any:
-        """在图片上绘制 ROI、检测框和置信度标签。"""
+        """在图片上绘制标定框、检测框和置信度标签。"""
         canvas = image.copy()
-        if roi:
-            x1, y1, x2, y2 = roi
-            self._cv2.rectangle(canvas, (x1, y1), (x2, y2), (0, 215, 255), 3)
-            self._cv2.putText(
-                canvas,
-                "ROI",
-                (x1 + 8, max(24, y1 + 24)),
-                self._cv2.FONT_HERSHEY_SIMPLEX,
-                0.75,
-                (0, 215, 255),
-                2,
-                self._cv2.LINE_AA,
-            )
+        canvas = self._draw_calibration_overlay(canvas, calibration)
         for index, detection in enumerate(detections):
             x1, y1, x2, y2 = detection["bbox"]
             color = self._box_color(index)
@@ -2611,7 +3719,7 @@ class LocalInferenceEngine:
                         3,
                         self._cv2.LINE_AA,
                         tipLength=0.2,
-                    )
+                )
         for point in points or []:
             px, py = int(point["x"]), int(point["y"])
             self._cv2.drawMarker(
@@ -2631,6 +3739,32 @@ class LocalInferenceEngine:
                 (0, 80, 255),
                 2,
                 self._cv2.LINE_AA,
+            )
+        return canvas
+
+    def _draw_calibration_overlay(self, image: Any, calibration: Any) -> Any:
+        """在已有图片上绘制网页提交的多边形标定框。"""
+        canvas = image
+        polygons = self._normalise_calibration_polygons(
+            calibration, canvas.shape[1], canvas.shape[0]
+        )
+        for index, polygon in enumerate(polygons, start=1):
+            points = self._numpy.asarray(polygon, dtype=self._numpy.int32).reshape(
+                -1, 1, 2
+            )
+            self._cv2.polylines(
+                canvas,
+                [points],
+                True,
+                (0, 215, 255),
+                3,
+            )
+            x, y = points[0][0]
+            canvas = self._draw_cn_text(
+                canvas,
+                f"标定框 {index}",
+                (int(x) + 8, max(24, int(y) + 24)),
+                (0, 215, 255),
             )
         return canvas
 

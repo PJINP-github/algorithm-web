@@ -14,18 +14,134 @@ pub struct AuthorityConfig {
     log_display: LogDisplayConfig,
     #[serde(rename = "Browser_Path", default)]
     browser_path: Option<BrowserPathConfig>,
+    #[serde(rename = "Browser_User_Data_Dir", default)]
+    browser_user_data_dir: Option<BrowserPathConfig>,
     #[serde(default = "default_rows_downloaded_file_algorithm")]
     rows_downloaded_file_algorithm: usize,
     #[serde(rename = "Document_display", default)]
     document_display: Vec<DocumentDisplay>,
     #[serde(rename = "File_Description", default)]
     file_description: FileDescriptionConfig,
+    #[serde(rename = "Tab_content", default)]
+    tab_content: Vec<GenericTabConfig>,
     #[serde(rename = "Administrator_Rights", default)]
     administrator: HashMap<String, bool>,
     #[serde(rename = "Standard_Level_1_User_Privileges", default)]
     standard_level_1: HashMap<String, bool>,
     #[serde(rename = "Standard_Level_2_User_Privileges", default)]
     standard_level_2: HashMap<String, bool>,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct GenericTabConfig {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    pub model_dir: String,
+    #[serde(default = "default_generic_entry")]
+    pub entry: String,
+    #[serde(rename = "Component_elements", default)]
+    pub component_elements: GenericComponentElements,
+    #[serde(default, alias = "Parameters_combinations")]
+    pub parameter_combinations: Vec<Vec<String>>,
+    #[serde(rename = "Log_Display", default)]
+    pub log_display: bool,
+    #[serde(rename = "Latest_temporal_display_file", default)]
+    pub latest_temporal_display_file: Option<LatestTemporalDisplay>,
+    #[serde(
+        rename = "Display_imported_folder",
+        default,
+        alias = "display_imported_folder"
+    )]
+    pub display_imported_folder: bool,
+}
+
+#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
+pub struct GenericComponentElements {
+    #[serde(rename = "import", default, alias = "imports")]
+    pub imports: Vec<GenericImport>,
+    #[serde(default)]
+    pub changes: Vec<GenericChange>,
+    #[serde(default)]
+    pub parameters: Vec<GenericParameter>,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct GenericImport {
+    pub id: String,
+    pub name: String,
+    #[serde(default = "default_generic_file_kind")]
+    pub kind: String,
+    #[serde(default)]
+    pub accept: String,
+    #[serde(default)]
+    pub required: bool,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct GenericChange {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub action: String,
+    #[serde(default)]
+    pub permission: Option<String>,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct GenericParameter {
+    pub id: String,
+    pub name: String,
+    #[serde(rename = "type", default = "default_generic_parameter_type")]
+    pub parameter_type: String,
+    #[serde(default)]
+    pub options: Vec<GenericOption>,
+    #[serde(default)]
+    pub default: serde_json::Value,
+    #[serde(default)]
+    pub required: bool,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct GenericOption {
+    pub value: String,
+    #[serde(default)]
+    pub label: String,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct LatestTemporalDisplay {
+    #[serde(default = "default_project_base")]
+    pub base: String,
+    #[serde(default)]
+    pub file: Option<String>,
+    #[serde(default)]
+    pub folder: Option<String>,
+    #[serde(default)]
+    pub recursive: bool,
+    #[serde(default)]
+    pub extensions: Vec<String>,
+    #[serde(default)]
+    pub display_folder: bool,
+}
+
+fn default_generic_entry() -> String {
+    "portal_entry.py".to_owned()
+}
+
+fn default_generic_file_kind() -> String {
+    "file".to_owned()
+}
+
+fn default_generic_parameter_type() -> String {
+    "text".to_owned()
+}
+
+fn default_project_base() -> String {
+    "project".to_owned()
 }
 
 #[derive(Clone, Debug, serde::Deserialize)]
@@ -221,14 +337,114 @@ impl AuthorityConfig {
         let Some(role_key) = Self::role_config_key(role) else {
             return false;
         };
-        let Some(feature_key) = Self::model_feature_key(model) else {
-            return false;
-        };
+        let feature_key = Self::model_feature_key(model);
+        if feature_key.is_none() {
+            return self
+                .tab_content
+                .iter()
+                .any(|tab| tab.id == model && self.role_feature_visible(role_key, model));
+        }
+        self.feature_tab_visibility
+            .get(role_key)
+            .and_then(|features| features.get(feature_key.unwrap()))
+            .copied()
+            .unwrap_or(false)
+    }
+
+    fn role_feature_visible(&self, role_key: &str, feature_key: &str) -> bool {
         self.feature_tab_visibility
             .get(role_key)
             .and_then(|features| features.get(feature_key))
             .copied()
             .unwrap_or(false)
+    }
+
+    pub fn generic_tabs(&self) -> &[GenericTabConfig] {
+        &self.tab_content
+    }
+
+    pub fn generic_tab(&self, model: &str) -> Option<&GenericTabConfig> {
+        self.tab_content.iter().find(|tab| tab.id == model)
+    }
+
+    pub fn generic_model_root(&self, project_root: &Path, model: &str) -> Option<PathBuf> {
+        let tab = self.generic_tab(model)?;
+        let normalized = tab.model_dir.trim().replace('\\', "/");
+        let relative = Path::new(&normalized);
+        if tab.id.trim().is_empty()
+            || relative.as_os_str().is_empty()
+            || relative.is_absolute()
+            || relative.components().any(|component| {
+                matches!(
+                    component,
+                    std::path::Component::ParentDir
+                        | std::path::Component::RootDir
+                        | std::path::Component::Prefix(_)
+                )
+            })
+        {
+            return None;
+        }
+        Some(project_root.join("model").join(relative))
+    }
+
+    pub fn generic_action_permission(&self, model: &str, action: &str) -> String {
+        self.generic_tab(model)
+            .and_then(|tab| {
+                tab.component_elements
+                    .changes
+                    .iter()
+                    .find(|change| change.id == action)
+                    .and_then(|change| change.permission.clone())
+            })
+            .filter(|permission| !permission.trim().is_empty())
+            .unwrap_or_else(|| Self::model_action(model, action))
+    }
+
+    pub fn generic_action_name(&self, model: &str, action: &str) -> Option<String> {
+        self.generic_tab(model)?
+            .component_elements
+            .changes
+            .iter()
+            .find(|change| change.id == action)
+            .map(|change| {
+                if change.action.trim().is_empty() {
+                    change.id.clone()
+                } else {
+                    change.action.clone()
+                }
+            })
+    }
+
+    pub fn generic_latest_project_paths(&self, project_root: &Path, model: &str) -> Vec<PathBuf> {
+        let Some(display) = self
+            .generic_tab(model)
+            .and_then(|tab| tab.latest_temporal_display_file.as_ref())
+        else {
+            return Vec::new();
+        };
+        if !display.base.eq_ignore_ascii_case("project") {
+            return Vec::new();
+        }
+        let mut paths = Vec::new();
+        if let Some(file) = display.file.as_deref() {
+            if let Some(path) = safe_project_relative_path(project_root, file) {
+                if path.is_file() {
+                    paths.push(path);
+                }
+            }
+        }
+        if let Some(folder) = display.folder.as_deref() {
+            if let Some(path) = safe_project_relative_path(project_root, folder) {
+                if display.display_folder && path.is_dir() {
+                    paths.push(path.clone());
+                }
+                if let Some(latest) = latest_file_in_directory(&path, display) {
+                    paths.push(latest);
+                }
+            }
+        }
+        paths
     }
 
     pub fn visible_file_names(&self, model: &str) -> Option<&[String]> {
@@ -244,7 +460,19 @@ impl AuthorityConfig {
     }
 
     pub fn browser_path(&self, project_root: &Path, model: &str) -> Option<PathBuf> {
-        let value = match self.browser_path.as_ref()? {
+        Self::browser_config_path(self.browser_path.as_ref(), project_root, model)
+    }
+
+    pub fn browser_user_data_dir(&self, project_root: &Path, model: &str) -> Option<PathBuf> {
+        Self::browser_config_path(self.browser_user_data_dir.as_ref(), project_root, model)
+    }
+
+    fn browser_config_path(
+        config: Option<&BrowserPathConfig>,
+        project_root: &Path,
+        model: &str,
+    ) -> Option<PathBuf> {
+        let value = match config? {
             BrowserPathConfig::Single(value) => Some(value.as_str()),
             BrowserPathConfig::PerModel(paths) => {
                 let aliases: &[&str] = match model {
@@ -262,7 +490,7 @@ impl AuthorityConfig {
         if value.is_empty() {
             return None;
         }
-        let path = PathBuf::from(value);
+        let path = PathBuf::from(value.replace('\\', "/"));
         if path.is_absolute() {
             return None;
         }
@@ -428,12 +656,78 @@ impl AuthorityConfig {
             feature_file_display,
             log_display: LogDisplayConfig::default(),
             browser_path: None,
+            browser_user_data_dir: None,
             rows_downloaded_file_algorithm: default_rows_downloaded_file_algorithm(),
             document_display: Vec::new(),
             file_description: FileDescriptionConfig::default(),
+            tab_content: Vec::new(),
             administrator,
             standard_level_1,
             standard_level_2,
+        }
+    }
+}
+
+fn safe_project_relative_path(project_root: &Path, value: &str) -> Option<PathBuf> {
+    let normalized = value.trim().replace('\\', "/");
+    let relative = Path::new(&normalized);
+    if value.trim().is_empty()
+        || relative.is_absolute()
+        || relative.components().any(|component| {
+            matches!(
+                component,
+                std::path::Component::ParentDir
+                    | std::path::Component::RootDir
+                    | std::path::Component::Prefix(_)
+            )
+        })
+    {
+        return None;
+    }
+    Some(project_root.join(relative))
+}
+
+fn latest_extension_allowed(display: &LatestTemporalDisplay, path: &Path) -> bool {
+    if display.extensions.is_empty() {
+        return true;
+    }
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default();
+    display.extensions.iter().any(|item| {
+        item.trim()
+            .trim_start_matches('.')
+            .eq_ignore_ascii_case(extension)
+    })
+}
+
+fn latest_file_in_directory(path: &Path, display: &LatestTemporalDisplay) -> Option<PathBuf> {
+    let mut candidates = Vec::new();
+    collect_latest_candidates(path, display.recursive, display, &mut candidates);
+    candidates.sort_by_key(|candidate| {
+        fs::metadata(candidate)
+            .and_then(|metadata| metadata.modified())
+            .unwrap_or(std::time::UNIX_EPOCH)
+    });
+    candidates.pop()
+}
+
+fn collect_latest_candidates(
+    path: &Path,
+    recursive: bool,
+    display: &LatestTemporalDisplay,
+    output: &mut Vec<PathBuf>,
+) {
+    let Ok(entries) = fs::read_dir(path) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let candidate = entry.path();
+        if candidate.is_file() && latest_extension_allowed(display, &candidate) {
+            output.push(candidate);
+        } else if recursive && candidate.is_dir() {
+            collect_latest_candidates(&candidate, recursive, display, output);
         }
     }
 }
@@ -478,6 +772,16 @@ mod tests {
                 .iter()
                 .any(|name| name == "数字-9-模型标注训练清单.xlsx")
         );
+        let image_tab = policy
+            .generic_tab("image_filtering")
+            .expect("image generic tab should be loaded");
+        assert_eq!(image_tab.entry, "portal_entry.py");
+        assert_eq!(
+            policy.generic_action_name("image_filtering", "group_and_clean"),
+            Some("group_and_clean".to_owned())
+        );
+        assert!(policy.model_visible("管理员", "image_filtering"));
+        assert!(!policy.model_visible("普通一级", "image_filtering"));
         assert_eq!(policy.log_visual_lines(), 19);
         assert_eq!(policy.rows_downloaded_file_algorithm(), 8);
     }
@@ -522,6 +826,9 @@ File_Description:
 Browser_Path:
   annotation: model/annotation/chrome.exe
   weekly: model/weekly/chrome.exe
+Browser_User_Data_Dir:
+  annotation: model/annotation/profile
+  weekly: model/weekly/profile
 "#,
         )
         .unwrap();
@@ -537,6 +844,18 @@ Browser_Path:
                 .unwrap(),
             std::path::PathBuf::from("project/model/weekly/chrome.exe")
         );
+        assert_eq!(
+            policy
+                .browser_user_data_dir(std::path::Path::new("project"), "annotation")
+                .unwrap(),
+            std::path::PathBuf::from("project/model/annotation/profile")
+        );
+        assert_eq!(
+            policy
+                .browser_user_data_dir(std::path::Path::new("project"), "weekly")
+                .unwrap(),
+            std::path::PathBuf::from("project/model/weekly/profile")
+        );
     }
 
     #[test]
@@ -548,6 +867,31 @@ Browser_Path:
                 .browser_path(std::path::Path::new("project"), "annotation")
                 .unwrap(),
             std::path::PathBuf::from("project/shared/chrome.exe")
+        );
+    }
+
+    #[test]
+    fn windows_style_browser_paths_are_normalized() {
+        let policy: AuthorityConfig = serde_yaml::from_str(
+            r#"
+Browser_Path:
+  annotation: 'model\\annotation\\chrome.exe'
+Browser_User_Data_Dir:
+  annotation: 'model\\annotation\\profile'
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            policy
+                .browser_path(std::path::Path::new("project"), "annotation")
+                .unwrap(),
+            std::path::PathBuf::from("project/model/annotation/chrome.exe")
+        );
+        assert_eq!(
+            policy
+                .browser_user_data_dir(std::path::Path::new("project"), "annotation")
+                .unwrap(),
+            std::path::PathBuf::from("project/model/annotation/profile")
         );
     }
 }

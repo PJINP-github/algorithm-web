@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import errno
 import html
 import hashlib
+import ipaddress
 import json
 import logging
 import os
@@ -4096,13 +4097,49 @@ def create_review_server(host: str, preferred_port: int, workspace: ReviewWorksp
 
 
 def local_lan_ip() -> str | None:
+    candidates: list[str] = []
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.connect(("8.8.8.8", 80))
-            ip = sock.getsockname()[0]
-            return ip if ip and not ip.startswith("127.") else None
+            append_lan_candidate(candidates, sock.getsockname()[0])
     except OSError:
-        return None
+        pass
+
+    for hostname in {socket.gethostname(), socket.getfqdn()}:
+        if not hostname:
+            continue
+        try:
+            addresses = socket.getaddrinfo(hostname, None, socket.AF_INET, socket.SOCK_DGRAM)
+        except OSError:
+            continue
+        for address in addresses:
+            append_lan_candidate(candidates, address[4][0])
+
+    for candidate in candidates:
+        if ipaddress.ip_address(candidate).is_private:
+            return candidate
+    return candidates[0] if candidates else None
+
+
+def usable_lan_ipv4(value: str | None) -> bool:
+    if not value:
+        return False
+    try:
+        ip = ipaddress.ip_address(value)
+    except ValueError:
+        return False
+    return (
+        ip.version == 4
+        and not ip.is_loopback
+        and not ip.is_unspecified
+        and not ip.is_link_local
+        and not ip.is_multicast
+    )
+
+
+def append_lan_candidate(candidates: list[str], value: str | None) -> None:
+    if usable_lan_ipv4(value) and value not in candidates:
+        candidates.append(value)
 
 
 def raise_process_priority() -> None:
@@ -4193,7 +4230,7 @@ def run_interactive_mode(
         show_auto_click=show_auto_click,
         show_mark_all_correct=show_mark_all_correct,
         show_mark_same_recognition=show_mark_same_recognition,
-        exit_after_export=interaction_mode == "local",
+        exit_after_export=True,
         web_hotkeys=web_hotkeys,
         newkeywords=newkeywords,
         default_wrong_keywords=default_wrong_keywords,
@@ -4226,9 +4263,14 @@ def run_interactive_mode(
             )
         server = create_review_server(server_host, port, workspace)
         browser_host = "127.0.0.1" if server_host in ("", "0.0.0.0", "::") else server_host
-        url = f"http://{browser_host}:{server.server_port}/"
+        local_url = f"http://{browser_host}:{server.server_port}/"
         lan_ip = local_lan_ip() if interaction_mode == "lan" and server_host in ("", "0.0.0.0", "::") else None
         lan_url = f"http://{lan_ip}:{server.server_port}/" if lan_ip else None
+        if interaction_mode == "lan" and not lan_url:
+            workspace._cleanup_session()
+            server.server_close()
+            raise RuntimeError("无法检测服务主机局域网 IPv4，已拒绝启动不可供局域网访问的审核地址")
+        url = lan_url or local_url
         logging.info("m 模式 Web 已启动: %s", url)
         print(f"m 模式 Web: {url}")
         if lan_url:

@@ -130,6 +130,7 @@ button:disabled {
 }
 
 .session {
+    min-width: 0;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -167,6 +168,10 @@ button:disabled {
     gap: 16px;
 }
 
+.workspace-panel.generic-panel {
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+}
+
 .side-panel {
     min-width: 0;
     display: grid;
@@ -191,6 +196,7 @@ button:disabled {
 }
 
 .job-control {
+    min-width: 0;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -201,6 +207,8 @@ button:disabled {
 }
 
 #running-job-select {
+    min-width: 0;
+    width: 168px;
     max-width: 168px;
 }
 
@@ -253,7 +261,19 @@ button:disabled {
     background: #d97706;
 }
 
-#trueno-roi-button.active {
+#trueno-inference-mode-button.mode-src {
+    border-color: #1769c2;
+    color: #ffffff;
+    background: #1769c2;
+}
+
+#trueno-inference-mode-button.mode-src:hover {
+    border-color: #0f559f;
+    color: #ffffff;
+    background: #0f559f;
+}
+
+#trueno-calibration-button.active {
     border-color: #1769c2;
     color: #ffffff;
     background: #1769c2;
@@ -340,6 +360,165 @@ h3 {
     gap: 10px;
 }
 
+.generic-control-row {
+    display: flex;
+    align-items: stretch;
+    flex-wrap: nowrap;
+    gap: 8px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.generic-imports,
+.generic-parameter-bar,
+.generic-parameters {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 8px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.generic-imports {
+    flex: 1.15 1 0;
+    min-height: 38px;
+}
+
+.generic-parameter-bar {
+    flex: .55 1 90px;
+}
+
+.generic-parameter-bar:empty {
+    flex: 0 1 0;
+}
+
+.generic-import-control {
+    min-width: 0;
+    flex: 1 1 0;
+    max-width: none;
+    overflow: hidden;
+    padding: 0 8px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.generic-import-name {
+    min-width: 0;
+    flex: .85 1 0;
+    max-width: none;
+}
+
+.generic-parameters {
+    flex: 2 1 0;
+    align-items: flex-end;
+}
+
+.generic-parameter {
+    min-width: 0;
+    max-width: none;
+    flex: 1 1 0;
+    display: grid;
+    gap: 3px;
+    color: #4a5d70;
+    font-size: 13px;
+}
+
+.generic-parameter > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.generic-parameter input,
+.generic-parameter select,
+.generic-parameter-bar select {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.generic-parameter select[multiple] {
+    height: 34px;
+    min-height: 34px;
+}
+
+.generic-checkbox {
+    flex: .8 1 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+    padding: 0;
+    white-space: nowrap;
+}
+
+.generic-checkbox input {
+    flex: 0 0 auto;
+}
+
+.generic-checkbox span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.generic-parameter-bar label {
+    min-width: 0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #4a5d70;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.action-grid.generic-action-grid {
+    display: grid;
+    grid-template-columns: repeat(
+        var(--generic-action-count, 1),
+        minmax(0, 1fr)
+    );
+    grid-auto-rows: minmax(120px, auto);
+    gap: 10px;
+    min-width: 0;
+}
+
+.action-grid.generic-action-grid .action-tile {
+    min-width: 0;
+    min-height: 120px;
+    height: 100%;
+    flex: none;
+}
+
+.action-grid.generic-action-grid .action-tile strong,
+.action-grid.generic-action-grid .action-tile span {
+    max-width: 100%;
+    overflow: visible;
+    text-overflow: clip;
+}
+
+.action-grid.generic-action-grid .action-tile strong {
+    white-space: normal;
+}
+
+.action-grid.generic-action-grid .action-tile span {
+    display: block;
+}
+
+.generic-control-row.is-compact,
+.generic-action-grid.is-compact {
+    gap: 6px;
+}
+
+.generic-control-row.is-ultra-compact .generic-import-control,
+.generic-action-grid.is-ultra-compact .action-tile {
+    padding-left: 8px;
+    padding-right: 8px;
+}
+
 .trueno-toolbar {
     position: relative;
 }
@@ -412,6 +591,66 @@ h3 {
     display: none;
 }
 
+.trueno-result-panel {
+    margin-top: 10px;
+    border: 1px solid #dfe7ef;
+    border-radius: 6px;
+    padding: 10px;
+    background: #f8fafc;
+    color: #1f2937;
+}
+
+.trueno-result-panel.hidden {
+    display: none;
+}
+
+.trueno-result-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.trueno-result-head span,
+.trueno-result-desc,
+.trueno-result-empty {
+    color: #607080;
+    font-size: 12px;
+}
+
+.trueno-result-list {
+    display: grid;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.trueno-result-row {
+    display: grid;
+    grid-template-columns: minmax(64px, .4fr) minmax(0, 1.8fr) minmax(48px, .4fr);
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 4px 0;
+}
+
+.trueno-result-key {
+    overflow: hidden;
+    color: #607080;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.trueno-result-row strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.trueno-result-desc {
+    margin: 8px 0 0;
+    overflow-wrap: anywhere;
+}
+
 .tool-row label {
     color: #4a5d70;
     font-size: 13px;
@@ -463,6 +702,10 @@ input[type="text"] {
     min-width: 220px;
 }
 
+.generic-parameter input[type="text"] {
+    min-width: 0;
+}
+
 .file-box {
     min-height: 0;
     display: grid;
@@ -487,6 +730,19 @@ input[type="text"] {
     border-radius: 6px;
     padding: 5px 6px;
     background: #f8fafc;
+}
+
+/* 通用图片页的处理文件改为紧凑排列 */
+.workspace-panel.generic-panel .file-list {
+    grid-template-rows: none;
+    grid-auto-rows: minmax(36px, auto);
+    align-content: start;
+    gap: 7px;
+}
+
+.workspace-panel.generic-panel .file-row {
+    min-height: 36px;
+    padding: 5px 6px;
 }
 
 .file-name {
@@ -803,6 +1059,15 @@ input[type="text"] {
         grid-template-columns: repeat(2, minmax(112px, 1fr));
     }
 
+    .session {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    #running-job-select {
+        width: min(42vw, 168px);
+    }
+
     .model-tabs button {
         min-width: 86px;
         padding: 0 8px;
@@ -878,6 +1143,23 @@ button:hover {
     border-color: #4d4d4d;
     color: #dfe4ea;
     background: #292929;
+}
+
+.trueno-result-panel {
+    border-color: #4d4d4d;
+    background: #404040;
+    color: #e5e7eb;
+}
+
+.trueno-result-head span,
+.trueno-result-desc,
+.trueno-result-empty,
+.trueno-result-key {
+    color: #aeb5bd;
+}
+
+.trueno-result-row {
+    border-color: #515151;
 }
 
 .config-menu {

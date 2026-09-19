@@ -2,6 +2,7 @@ import json
 import os
 import re
 import platform
+import shutil
 from dataclasses import dataclass
 from copy import deepcopy
 from pathlib import Path
@@ -104,15 +105,15 @@ def resolve_chrome_path(base_dir):
     configured = os.environ.get("RUST_PORTAL_CHROME_PATH", "").strip()
     if configured and Path(configured).is_file():
         return str(Path(configured))
-    configured_path = _resolve_authority_browser_path(base_path, "annotation")
-    if configured_path is not None:
-        if configured_path.is_file():
-            return str(configured_path)
-        raise RuntimeError(
-            f"authority.yaml 中 annotation 的 Browser_Path 不存在或不是文件: "
-            f"{configured_path}"
-        )
     if platform.system() == "Windows":
+        configured_path = _resolve_authority_browser_path(base_path, "annotation")
+        if configured_path is not None:
+            if configured_path.is_file():
+                return str(configured_path)
+            raise RuntimeError(
+                f"authority.yaml 中 annotation 的 Browser_Path 不存在或不是文件: "
+                f"{configured_path}"
+            )
         candidates = [
             base_path.parent / "chrome" / "chrome.exe",
             base_path / "chrome" / "chrome.exe",
@@ -126,22 +127,118 @@ def resolve_chrome_path(base_dir):
             f"{candidates[0]}"
         )
 
-    linux_chrome_paths = [
+    linux_chrome_paths = [Path("/usr/lib/chromium/chromium")] + [
+        Path(found)
+        for name in (
+            "google-chrome-stable",
+            "google-chrome",
+            "chromium",
+            "chromium-browser",
+            "brave-browser",
+            "microsoft-edge",
+            "microsoft-edge-stable",
+        )
+        if (found := shutil.which(name))
+    ] + [
         Path("/usr/bin/google-chrome-stable"),
         Path("/usr/bin/google-chrome"),
         Path("/usr/bin/chromium"),
         Path("/snap/bin/chromium"),
         Path("/usr/local/bin/google-chrome"),
         Path("/usr/bin/chromium-browser"),
-        base_path.parent / "chrome" / "chrome",
     ]
     for path in linux_chrome_paths:
-        if path.exists():
-            return str(path)
+        if path.is_file():
+            return str(path.resolve())
     raise RuntimeError("未找到Chrome/Chromium浏览器，请安装或指定路径")
 
 
+def resolve_chrome_user_data_dir(base_dir, model_key="annotation"):
+    """
+    Resolve a project-isolated browser profile.
+
+    Linux copies the system Chromium Default profile once, then keeps using
+    the project copy so daily Chromium can remain open independently.
+    """
+    if platform.system() == "Linux":
+        configured = os.environ.get("RUST_PORTAL_USER_DATA_DIR", "").strip()
+        profile_root = (
+            Path(os.path.expandvars(configured)).expanduser().resolve()
+            if configured
+            else Path(base_dir).resolve().parent / ".chromium_profile_linux"
+        )
+        if _seed_linux_chromium_profile(profile_root):
+            return str(profile_root)
+
+    configured_path = _resolve_authority_config_path(
+        Path(base_dir),
+        "Browser_User_Data_Dir",
+        model_key,
+    )
+    if configured_path is not None:
+        configured_path.mkdir(parents=True, exist_ok=True)
+        return str(configured_path)
+
+    configured = os.environ.get("RUST_PORTAL_USER_DATA_DIR", "").strip()
+    if configured:
+        path = Path(os.path.expandvars(configured)).expanduser().resolve()
+        path.mkdir(parents=True, exist_ok=True)
+        return str(path)
+
+    path = Path(base_dir).parent / "chromium_user_data"
+    path.mkdir(parents=True, exist_ok=True)
+    return str(path.resolve())
+
+
+def _seed_linux_chromium_profile(profile_root):
+    """Copy the system Default profile once into the project profile root."""
+    configured_source = os.environ.get("RUST_PORTAL_CHROMIUM_SOURCE_DIR", "").strip()
+    source_root = (
+        Path(os.path.expandvars(configured_source)).expanduser().resolve()
+        if configured_source
+        else Path.home() / ".config" / "chromium"
+    )
+    source_profile = source_root / "Default"
+    target_profile = profile_root / "Default"
+    if not source_profile.is_dir():
+        return False
+
+    try:
+        profile_root.mkdir(parents=True, exist_ok=True)
+        if not target_profile.exists():
+            shutil.copytree(
+                source_profile,
+                target_profile,
+                ignore=_chromium_profile_copy_ignore,
+            )
+        local_state = source_root / "Local State"
+        target_state = profile_root / "Local State"
+        if local_state.is_file() and not target_state.exists():
+            shutil.copy2(local_state, target_state)
+        return True
+    except OSError as exc:
+        print(f"复制系统 Chromium profile 失败，将使用现有 profile：{exc}")
+        return target_profile.is_dir()
+
+
+def _chromium_profile_copy_ignore(_directory, names):
+    ignored = {
+        "Cache",
+        "Code Cache",
+        "GPUCache",
+        "ShaderCache",
+        "GrShaderCache",
+        "DawnCache",
+        "Service Worker",
+    }
+    return {name for name in names if name in ignored}
+
+
 def _resolve_authority_browser_path(base_path, model_key):
+    return _resolve_authority_config_path(base_path, "Browser_Path", model_key)
+
+
+def _resolve_authority_config_path(base_path, section_name, model_key):
     current = Path(base_path).resolve()
     for directory in (current, *current.parents):
         authority_path = directory / "authority.yaml"
@@ -156,12 +253,13 @@ def _resolve_authority_browser_path(base_path, model_key):
             continue
         if not isinstance(loaded, dict):
             continue
-        value = _browser_path_value(loaded.get("Browser_Path"), model_key)
+        value = _browser_path_value(loaded.get(section_name), model_key)
         if not value:
             continue
-        path = Path(os.path.expandvars(value)).expanduser()
+        path = Path(os.path.expandvars(value).replace("\\", "/")).expanduser()
         if not path.is_absolute():
-            path = authority_path.parent / path
+            project_root = resolve_project_root(authority_path.parent)
+            path = (project_root or authority_path.parent) / path
         return path
     return None
 

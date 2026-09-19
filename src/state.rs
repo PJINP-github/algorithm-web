@@ -16,6 +16,7 @@ pub struct AppState {
     pub jobs: Arc<Mutex<HashMap<String, crate::models::JobInfo>>>,
     pub job_controls: Arc<Mutex<HashMap<String, JobControl>>>,
     pub job_semaphore: Arc<tokio::sync::Semaphore>,
+    pub h_review_semaphore: Arc<tokio::sync::Semaphore>,
     pub authority: Arc<crate::authority::AuthorityConfig>,
     pub sequence: Arc<AtomicU64>,
     pub project_root: PathBuf,

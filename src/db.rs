@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, Mutex, atomic::AtomicU64},
 };
 
-pub fn init(path: &Path) -> AppState {
+pub fn init(path: &Path, project_root: PathBuf) -> AppState {
     let conn = rusqlite::Connection::open(path).unwrap();
     conn.execute(
         "CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY, title TEXT NOT NULL)",
@@ -100,7 +100,6 @@ pub fn init(path: &Path) -> AppState {
     )
     .unwrap();
 
-    let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let authority = crate::authority::AuthorityConfig::load(&project_root);
 
     AppState {
@@ -109,6 +108,7 @@ pub fn init(path: &Path) -> AppState {
         jobs: Arc::new(Mutex::new(HashMap::new())),
         job_controls: Arc::new(Mutex::new(HashMap::new())),
         job_semaphore: Arc::new(tokio::sync::Semaphore::new(4)),
+        h_review_semaphore: Arc::new(tokio::sync::Semaphore::new(1)),
         authority: Arc::new(authority),
         sequence: Arc::new(AtomicU64::new(1)),
         project_root,

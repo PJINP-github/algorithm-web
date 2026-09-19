@@ -17,7 +17,77 @@
 Browser_Path:
   annotation: 'model/Model-Annotation-tag-0.1.1+python/chrome/chrome.exe'
   weekly: 'model/Weekly-Report-Print-tag-0.0.8+python/date_review/chrome/chrome.exe'
+# 浏览器用户数据目录固定在这里，登录一次后由后续自动化流程复用。
+# 路径相对于项目根目录；配置优先级高于 RUST_PORTAL_USER_DATA_DIR。
+Browser_User_Data_Dir:
+  annotation: 'model/Model-Annotation-tag-0.1.1+python/chromium_user_data'
+  weekly: 'model/Weekly-Report-Print-tag-0.0.8+python/date_review/chrome/Data'
 rows_downloaded_file_algorithm: 8
+
+# 通用模型标签页。固定标签页仍由 Rust/JavaScript 保持原实现；
+# 这里的模型只需要提供受控 portal_entry.py 入口即可接入网页。
+Tab_content:
+  - id: image_filtering
+    name: 图片
+    description: 图片相似分组、模糊图处理和样本报表。
+    model_dir: Image_filtering_processing-tag0.0.1+python
+    entry: portal_entry.py
+    Component_elements:
+      import:
+        - id: image_folder
+          name: 导入图片文件夹
+          kind: folder
+          accept: .png,.jpg,.jpeg,.bmp,.webp,.tif,.tiff
+          required: false
+        - id: image_file
+          name: 导入单张图片
+          kind: file
+          accept: .png,.jpg,.jpeg,.bmp,.webp,.tif,.tiff
+          required: false
+      changes:
+        - id: group_only
+          name: 仅图片分组
+          description: 只生成相似图分组和 XLSX 报表，不删除图片。
+          action: group_only
+        - id: group_and_clean
+          name: 分组并清理
+          description: 生成报表、备份 ZIP，并按参数处理模糊图和组内数量。
+          action: group_and_clean
+        - id: group_and_backup
+          name: 分组并备份
+          description: 生成报表和原图 ZIP，不删除图片。
+          action: group_and_backup
+      parameters:
+        - id: blur_policy
+          name: 模糊图片
+          type: select
+          default: remove
+          options:
+            - value: keep
+              label: 保留
+            - value: remove
+              label: 删除模糊图
+        - id: retention_count
+          name: 每组保留数量
+          type: number
+          default: 3
+          required: true
+        - id: backup_zip
+          name: 生成原图备份 ZIP
+          type: checkbox
+          default: true
+    parameter_combinations:
+      - [blur_policy, retention_count, backup_zip]
+      - [blur_policy, backup_zip]
+    Log_Display: true
+    Latest_temporal_display_file:
+      base: project
+      file: Document/VERSION
+      folder: Document
+      recursive: false
+      extensions: [md, yaml, yml, txt]
+      display_folder: true
+    Display_imported_folder: true
 
 # 登录后功能标签页显示开关。
 Feature_Tab_Visibility:
@@ -28,6 +98,7 @@ Feature_Tab_Visibility:
     Offline_Package_Organization: true
     Weekly-Report-Print: true
     Trueno-Inference: true
+    image_filtering: true
 
   # 普通一级：默认只显示日志转换。
   Standard_Level_1_User_Privileges:
@@ -36,6 +107,7 @@ Feature_Tab_Visibility:
     Offline_Package_Organization: true
     Weekly-Report-Print: true
     Trueno-Inference: true
+    image_filtering: false
 
   # 普通二级：默认显示全部业务功能标签页。
   Standard_Level_2_User_Privileges:
@@ -44,6 +116,7 @@ Feature_Tab_Visibility:
     Offline_Package_Organization: true
     Weekly-Report-Print: true
     Trueno-Inference: true
+    image_filtering: true
 
 # 处理文件显示白名单。
 # 说明：这里只按文件名匹配，不影响后端任务实际产物；未列出的产物不会出现在“处理文件”列表里。
@@ -272,6 +345,9 @@ Administrator_Rights:
 
   # Trueno-Inference：YOLO/OCR 本地单模型推理。
   model.trueno.infer: true
+  model.image_filtering.group_only: true
+  model.image_filtering.group_and_clean: true
+  model.image_filtering.group_and_backup: true
 
 # 普通一级：默认仅开放日志转换相关能力。
 Standard_Level_1_User_Privileges:
@@ -324,6 +400,9 @@ Standard_Level_1_User_Privileges:
 
   # Trueno-Inference：YOLO/OCR 本地单模型推理。
   model.trueno.infer: true
+  model.image_filtering.group_only: false
+  model.image_filtering.group_and_clean: false
+  model.image_filtering.group_and_backup: false
   
 # 普通二级：默认开放全部业务模型，但不开放配置与授权码管理。
 Standard_Level_2_User_Privileges:
@@ -375,3 +454,6 @@ Standard_Level_2_User_Privileges:
 
   # Trueno-Inference：YOLO/OCR 本地单模型推理。
   model.trueno.infer: true
+  model.image_filtering.group_only: true
+  model.image_filtering.group_and_clean: true
+  model.image_filtering.group_and_backup: true

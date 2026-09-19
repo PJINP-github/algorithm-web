@@ -14,6 +14,10 @@
         </div>
         <div class="session">
             <img id="session-user-icon" class="session-user-icon" alt="" aria-hidden="true">
+            <div class="job-control hidden" id="job-control">
+                <select id="running-job-select" aria-label="运行中的任务"></select>
+                <button type="button" id="stop-job-button">终止</button>
+            </div>
             <button type="button" id="logout-button">返回</button>
         </div>
     </header>
@@ -25,10 +29,6 @@
                 <div class="section-head">
                     <h2>运行日志</h2>
                     <div class="job-head-actions">
-                        <div class="job-control hidden" id="job-control">
-                            <select id="running-job-select" aria-label="运行中的任务"></select>
-                            <button type="button" id="stop-job-button">终止</button>
-                        </div>
                         <div class="pager">
                             <button type="button" id="log-prev">上一页</button>
                             <span id="log-page">0/0</span>
